@@ -158,7 +158,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def parse_images_from_page(self, page_url):
         """
-        Extract image links from a given page URL.
+        Extract image links from a given page URL, focusing on ProductImage__images class.
         
         Args:
             page_url (str): The URL of the page to parse.
@@ -167,8 +167,18 @@ class Processor(metaclass=RuntimeMeta):
             list: A list of unique image URLs found on the page.
         """
         logging.info(f"Parsing images from page: {page_url}")
+        headers = {
+            'User-Agent': random.choice(self.user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://auctions.yahoo.co.jp/',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
         try:
-            response = requests.get(page_url, timeout=10)
+            time.sleep(random.uniform(1, 3))
+            response = self.session.get(page_url, headers=headers, timeout=15)
             response.raise_for_status()
         except requests.RequestException as e:
             logging.error(f"Failed to retrieve the webpage: {e}")
@@ -176,23 +186,24 @@ class Processor(metaclass=RuntimeMeta):
 
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Try different selectors to find image elements
-        image_elements = (
-            soup.select('img.Product__imageData') or
-            soup.select('img.ProductImage__image') or
-            soup.select('img[src^="https://"]')
-        )
+        # Focus specifically on ProductImage__images class
+        image_elements = soup.select('.ProductImage__images img')
         
         if not image_elements:
-            logging.warning("No image elements found on the page.")
+            logging.warning("No ProductImage__images elements found on the page.")
         
         image_links = []
         for img in image_elements:
             src = img.get('src')
-            if src and src.startswith("https://"):
+            if src:
+                # Check if the src is a relative URL
+                if src.startswith('//'):
+                    src = 'https:' + src
+                elif not src.startswith('http'):
+                    src = 'https://auctions.yahoo.co.jp' + src
                 image_links.append(src)
             else:
-                logging.warning(f"Found invalid image source: {src}")
+                logging.warning(f"Found image without src attribute: {img}")
         
         unique_links = list(set(image_links))
         logging.info(f"Found {len(unique_links)} unique image links")

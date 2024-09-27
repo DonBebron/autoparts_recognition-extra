@@ -41,7 +41,14 @@ def encode_image(img):
     img = img.resize(cfg.image_size)
     img = np.array(img)
     img = img.astype('float32')
-    img /= 255.0
+    
+    # Add a small epsilon to avoid division by zero
+    epsilon = 1e-7
+    img = (img + epsilon) / (255.0 + epsilon)
+    
+    # Clip values to ensure they're in the valid range [0, 1]
+    img = np.clip(img, 0, 1)
+    
     return img
 
 def load_data(image_link):
@@ -74,7 +81,8 @@ class Processor(metaclass=RuntimeMeta):
                 if link and img:
                     yield img.get('src'), link.get('href')
         else:
-            print(f'Failed to retrieve the webpage. Status code: {response.status_code}, URL: {url}')
+            print(f'Failed to retrieve the webpage: {url}')
+            print(f'Status code: {response.status_code}')
 
     def parse_images_from_page(self, page_url):
         # Extract all image links from the product page
@@ -94,14 +102,31 @@ class Processor(metaclass=RuntimeMeta):
             print(f'Failed to retrieve the webpage. Status code: {response.status_code}')
 
     def build_dataset(self, image_links):
-        images = [load_data(image_link) for image_link in tqdm(image_links)]
-        images = [img for img in images if img is not None]
+        images = []
+        for image_link in tqdm(image_links):
+            img = load_data(image_link)
+            if img is not None:
+                images.append(img)
+
+        if not images:
+            print("Warning: No valid images found. Returning empty dataset.")
+            return Dataset.from_tensor_slices([]).batch(1)  # Return an empty dataset
 
         dataset = Dataset.from_tensor_slices(images)
+        
+        # Add error checking
         try:
+            # Check if the dataset is empty
+            if tf.data.experimental.cardinality(dataset).numpy() == 0:
+                print("Warning: Dataset is empty. Returning empty dataset.")
+                return Dataset.from_tensor_slices([]).batch(1)
+            
+            # Try to fetch the first element
             next(iter(dataset))
         except Exception as e:
-            print(e)
+            print(f"Error in dataset: {e}")
+            print("Returning empty dataset.")
+            return Dataset.from_tensor_slices([]).batch(1)
 
         dataset = dataset.batch(self.batch_size)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)

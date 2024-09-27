@@ -74,7 +74,7 @@ class Processor(metaclass=RuntimeMeta):
                 if link and img:
                     yield img.get('src'), link.get('href')
         else:
-            print(f'Failed to retrieve the webpage. Status code: {response.status_code}')
+            print(f'Failed to retrieve the webpage. Status code: {response.status_code}, URL: {url}')
 
     def parse_images_from_page(self, page_url):
         # Extract all image links from the product page

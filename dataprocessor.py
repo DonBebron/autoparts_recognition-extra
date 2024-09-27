@@ -110,8 +110,11 @@ class Processor(metaclass=RuntimeMeta):
             tuple: A pair of (image_src, product_link) for each product found.
         """
         logging.info(f"Getting page content from: {url}")
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
         except requests.RequestException as e:
             logging.error(f"Failed to retrieve the webpage: {e}")

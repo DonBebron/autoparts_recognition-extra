@@ -11,6 +11,8 @@ import requests
 from PIL import Image
 from io import BytesIO
 from bs4 import BeautifulSoup
+import time
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -97,6 +99,12 @@ class Processor(metaclass=RuntimeMeta):
     def __init__(self, image_size, batch_size):
         self.image_size = image_size
         self.batch_size = batch_size
+        self.session = requests.Session()
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+        ]
 
     def get_page_content(self, url, verbose=0):
         """
@@ -111,10 +119,18 @@ class Processor(metaclass=RuntimeMeta):
         """
         logging.info(f"Getting page content from: {url}")
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': random.choice(self.user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://auctions.yahoo.co.jp/',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         }
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            # Add a delay before each request
+            time.sleep(random.uniform(1, 3))
+            response = self.session.get(url, headers=headers, timeout=15)
             response.raise_for_status()
         except requests.RequestException as e:
             logging.error(f"Failed to retrieve the webpage: {e}")

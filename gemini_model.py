@@ -209,8 +209,8 @@ class GeminiInference():
           ]
           prompt_parts = [image_parts[0], specific_prompt]
           
-          second_answer = self.get_response(img)  # Using the modified get_response method
-          second_extracted_number = self.extract_number(second_answer.text)
+          second_answer = self.get_response(img)  # This already returns the text
+          second_extracted_number = self.extract_number(second_answer)  # Remove .text here
           
           if second_extracted_number.upper() != "NONE":
             second_validation_result = self.validate_number(second_extracted_number)

@@ -106,13 +106,14 @@ class Processor(metaclass=RuntimeMeta):
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
         ]
 
-    def get_page_content(self, url, verbose=0):
+    def get_page_content(self, url, verbose=0, max_retries=5):
         """
         Retrieve and parse product information from a given URL.
         
         Args:
             url (str): The URL of the page to scrape.
             verbose (int): Verbosity level for logging.
+            max_retries (int): Maximum number of retry attempts.
         
         Yields:
             tuple: A pair of (image_src, product_link) for each product found.
@@ -126,35 +127,46 @@ class Processor(metaclass=RuntimeMeta):
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
         }
-        try:
-            # Add a delay before each request
-            time.sleep(random.uniform(1, 3))
-            response = self.session.get(url, headers=headers, timeout=15)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            logging.error(f"Failed to retrieve the webpage: {e}")
-            return
 
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Try different selectors to find product items
-        product_items = (
-            soup.select('li.Product') or
-            soup.select('div.ProductTile') or
-            soup.select('div[class*="product"]')
-        )
-        
-        if not product_items:
-            logging.warning("No product items found on the page.")
-        
-        for item in product_items:
-            link = item.select_one('a[href^="https://"]')
-            img = item.select_one('img[src^="https://"]')
-            if link and img:
-                yield img.get('src'), link.get('href')
-            else:
-                logging.warning(f"Found incomplete product item: link={link}, img={img}")
+        for attempt in range(max_retries):
+            try:
+                # Add a delay before each request with exponential backoff
+                delay = (2 ** attempt) + random.random()
+                time.sleep(delay)
+                
+                response = self.session.get(url, headers=headers, timeout=15)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Try different selectors to find product items
+                product_items = (
+                    soup.select('li.Product') or
+                    soup.select('div.ProductTile') or
+                    soup.select('div[class*="product"]')
+                )
+                
+                if not product_items:
+                    logging.warning("No product items found on the page.")
+                
+                for item in product_items:
+                    link = item.select_one('a[href^="https://"]')
+                    img = item.select_one('img[src^="https://"]')
+                    if link and img:
+                        yield img.get('src'), link.get('href')
+                    else:
+                        logging.warning(f"Found incomplete product item: link={link}, img={img}")
+                
+                # If we've successfully processed the page, break the retry loop
+                break
+            
+            except requests.RequestException as e:
+                logging.error(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt == max_retries - 1:
+                    logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
+                    return
 
     def parse_images_from_page(self, page_url):
         """

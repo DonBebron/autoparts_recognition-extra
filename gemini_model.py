@@ -17,7 +17,7 @@ class GeminiInference():
         "temperature": 1,
         "top_p": 1,
         "top_k": 32,
-        "max_output_tokens": 4096,
+        "max_output_tokens": 8192,
     }
     safety_settings = [
         {
@@ -50,7 +50,7 @@ class GeminiInference():
         "temperature": 0.5,
         "top_p": 1,
         "top_k": 32,
-        "max_output_tokens": 1024,
+        "max_output_tokens": 8192,
     }
     safety_settings = [
         # ... (same safety settings as the main model)

@@ -16,6 +16,11 @@ from io import BytesIO
 from PIL import Image
 from IPython.display import clear_output
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 cfg = Config
 logs = Logs()
 
@@ -61,34 +66,36 @@ def parse_args():
 def encode(link:str, 
            picker:TargetModel, 
            model:GeminiInference) -> dict: 
+    logging.info(f"Processing link: {link}")
     page_img_links = picker.processor.parse_images_from_page(link)
     page_img_links = list(set(page_img_links))
     
+    logging.info(f"Found {len(page_img_links)} unique image links")
     images_probs = picker.do_inference_return_probs(page_img_links)
     for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]: 
-        print(f'Trying to predict on image {target_image_link} with score {score}')
+        logging.info(f'Predicting on image {target_image_link} with score {score}')
         detail_number = str(model(target_image_link))
                 
         if detail_number.lower().strip() == 'none'.lower(): 
-            print("Detail number not found, trying again...") 
+            logging.warning("Detail number not found, trying next image...")
             continue
         else: 
             break
     
     if detail_number.lower().strip() == 'none'.lower(): 
-        print("Trying again...")
+        logging.warning("No detail number found in any image, trying again...")
         
         for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]: 
-            print(f'Trying to predict on image {target_image_link} with score {score}')
+            logging.info(f'Retrying prediction on image {target_image_link} with score {score}')
             detail_number = str(model(target_image_link))
                     
             if detail_number.lower().strip() == 'none'.lower(): 
-                print("Detail number not found, trying again...") 
+                logging.warning("Detail number not found, trying next image...")
                 continue
             else: 
                 break
         
-    print("Predicted number id:", detail_number)
+    logging.info(f"Predicted number id: {detail_number}")
 
     parsed_info = picker.processor.load_product_info(link)
     return {"predicted_number": detail_number, 
@@ -100,9 +107,9 @@ def encode(link:str,
 def save_intermediate_results(result, filename):
     try:
         pd.DataFrame(result).to_excel(f"{filename}.xlsx", index=False)
-        print(f"Intermediate results saved to {filename}.xlsx")
+        logging.info(f"Intermediate results saved to {filename}.xlsx")
     except Exception as e:
-        print(f"Error saving intermediate results to Excel: {e}. Saving in pickle format instead.")
+        logging.error(f"Error saving intermediate results to Excel: {e}. Saving in pickle format instead.")
         with open(f'{filename}.pkl', 'wb') as f:
             pickle.dump(result, f)
 
@@ -113,8 +120,10 @@ def reduce(main_link:str,
            max_links:int = 90, 
            savename:str = 'recognized_data', 
            **kwargs): 
+    logging.info(f"Starting link collection from {main_link}")
     all_links = collect_links(picker, main_link, max_pages=max_steps, max_links=max_links)
     all_links = list(set(all_links))
+    logging.info(f"Collected {len(all_links)} unique links")
                
     result = {"predicted_number": list(), 
               "url": list(), 
@@ -124,19 +133,19 @@ def reduce(main_link:str,
     
     for i, page_link in tqdm(enumerate(all_links), total=len(all_links)):     
         try: 
-            print(f"Processing {i+1}/{len(all_links)} link")
-            for (k, v) in encode(page_link,picker, **kwargs).items(): 
+            logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
+            for (k, v) in encode(page_link, picker, **kwargs).items(): 
                 result[k].append(v)
 
             if (i + 1) % 10 == 0:  # Save every 10 iterations
                 save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
 
-            clear_output(wait=False)
         except Exception as e: 
-            print(e)
+            logging.error(f"Error processing link {page_link}: {e}")
             if ignore_error:
                 continue
             else:
+                logging.error("Stopping due to error and ignore_error=False")
                 break
 
     return result
@@ -155,6 +164,7 @@ if __name__ == "__main__":
 
     picker = TargetModel()
 
+    logging.info(f"Starting encoding process with model: {model_name}")
     encoding_result = reduce(
         addictional_data['main_link'], 
         picker = picker, 
@@ -168,7 +178,9 @@ if __name__ == "__main__":
     # Save final results
     try:
         pd.DataFrame(encoding_result).to_excel(f"{addictional_data['savename']}.xlsx", index=False)
+        logging.info(f"Final results saved to {addictional_data['savename']}.xlsx")
     except Exception as e:
-        print(f"Error saving to Excel: {e}. Saving in pickle format instead.")
+        logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
         with open(f'{addictional_data["savename"]}.pkl', 'wb') as f:
             pickle.dump(encoding_result, f)
+        logging.info(f"Final results saved to {addictional_data['savename']}.pkl")

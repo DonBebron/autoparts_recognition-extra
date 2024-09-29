@@ -8,7 +8,7 @@ from PIL import Image
 import requests
 
 class GeminiInference():
-  def __init__(self, api_key,  model_name = 'gemini-1.5-pro', prompt=None):
+  def __init__(self, api_key,  model_name = 'gemini-1.5-flash', prompt=None):
     self.gemini_key = api_key
     self.prompt = prompt
 

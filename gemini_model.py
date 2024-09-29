@@ -3,6 +3,7 @@
 import google.generativeai as genai
 from pathlib import Path
 from time import sleep
+import random
 
 from PIL import Image
 import requests
@@ -114,18 +115,21 @@ class GeminiInference():
         (self.prompt if self.prompt is not None else "..."),  # Existing prompt
     ]
     
-    max_retries = 3
-    retry_delay = 2  # Initial delay in seconds
+    max_retries = 20
+    base_delay = 5  # Initial delay in seconds
     
     for attempt in range(max_retries):
         try:
+            # Add a small random delay before each request
+            sleep(random.uniform(1, 3))
+            
             response = self.model.generate_content(prompt_parts)
             return response.text
         except Exception as e:
             if "429 Resource has been exhausted" in str(e):
-                print(f"Rate limit reached. Retrying in {retry_delay} seconds...")
-                sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                print(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                sleep(delay)
             else:
                 raise  # Re-raise the exception if it's not a rate limit error
     

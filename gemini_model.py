@@ -188,7 +188,8 @@ class GeminiInference():
           
           # Second attempt with a more specific prompt
           specific_prompt = f"""
-          The previously extracted number "{extracted_number}" was invalid.
+          The previously extracted number "{extracted_number}" was invalid. 
+          {validation_result}
           Please re-examine the image carefully and try to identify a valid VAG part number.
           Remember, a valid VAG part number typically:
           - Consists of 9-11 characters

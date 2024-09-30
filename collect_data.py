@@ -4,13 +4,10 @@ import argparse
 
 import json 
 import os 
-from tqdm.auto import tqdm
-# import clear_output 
-from IPython.display import clear_output
 
 def collect_links(t, first_page_link, max_pages=3, max_links=90, verbose=0) -> list:
     products_links = list()
-    for i in tqdm(range(max_pages), desc="Collecting pages"):
+    for i in range(max_pages):
         page_num = i + 1
         # Construct the URL for each page by updating the 'b' parameter
         main_link = first_page_link.replace('b=1', f'b={1 + (page_num - 1) * 100}')
@@ -20,7 +17,6 @@ def collect_links(t, first_page_link, max_pages=3, max_links=90, verbose=0) -> l
         
         if verbose:
             print('\n'.join(pages))
-            clear_output(wait=True)
         
         products_links.extend(pages)
         
@@ -69,7 +65,7 @@ def main(main_page_link, target_folder_name) -> None :
   # remove duplicates 
   products_links = list(set(products_links))
 
-  for i, page_link in tqdm(enumerate(products_links), total=len(products_links), desc="Processing links"):
+  for i, page_link in enumerate(products_links):
     print(f'page {i+1}/{len(products_links)}')
     map_fn(t, target_folder_name, page_link)
 

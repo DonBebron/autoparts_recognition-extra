@@ -5,7 +5,6 @@ from config import RuntimeMeta
 import tensorflow as tf
 import numpy as np
 from tensorflow.data import Dataset
-from tqdm.notebook import tqdm
 
 import requests
 from PIL import Image
@@ -253,13 +252,15 @@ class Processor(metaclass=RuntimeMeta):
             tf.data.Dataset: A TensorFlow dataset containing the processed images.
         """
         images = []
-        for image_link in tqdm(image_links):
+        for i, image_link in enumerate(image_links):
             img = load_data(image_link)
             if img is not None:
                 images.append(img)
+            if (i + 1) % 10 == 0:
+                logging.info(f"Processed {i + 1}/{len(image_links)} images")
 
         if not images:
-            print("Warning: No valid images found. Returning empty dataset.")
+            logging.warning("No valid images found. Returning empty dataset.")
             return Dataset.from_tensor_slices([]).batch(1)  # Return an empty dataset
 
         dataset = Dataset.from_tensor_slices(images)
@@ -268,14 +269,14 @@ class Processor(metaclass=RuntimeMeta):
         try:
             # Check if the dataset is empty
             if tf.data.experimental.cardinality(dataset).numpy() == 0:
-                print("Warning: Dataset is empty. Returning empty dataset.")
+                logging.warning("Dataset is empty. Returning empty dataset.")
                 return Dataset.from_tensor_slices([]).batch(1)
             
             # Try to fetch the first element
             next(iter(dataset))
         except Exception as e:
-            print(f"Error in dataset: {e}")
-            print("Returning empty dataset.")
+            logging.error(f"Error in dataset: {e}")
+            logging.warning("Returning empty dataset.")
             return Dataset.from_tensor_slices([]).batch(1)
 
         dataset = dataset.batch(self.batch_size)

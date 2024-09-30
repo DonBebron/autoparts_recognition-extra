@@ -126,7 +126,7 @@ class GeminiInference():
             response = self.model.generate_content(prompt_parts)
             return response.text
         except Exception as e:
-            if "429 Resource has been exhausted" in str(e):
+            if "quota" in str(e).lower():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                 print(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                 sleep(delay)
@@ -224,4 +224,3 @@ class GeminiInference():
               print(f"Second validation failed: {second_validation_result}")
           
       return "NONE"
-

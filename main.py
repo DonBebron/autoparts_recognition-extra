@@ -17,6 +17,9 @@ from PIL import Image
 from IPython.display import clear_output
 
 import logging
+import time
+import random
+from requests.exceptions import RequestException
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -131,22 +134,40 @@ def reduce(main_link:str,
               "correct_image_link": list(), 
               "incorrect_image_links": list()}
     
+    max_retries = 20
+    base_delay = 5  # Initial delay in seconds
+    
     for i, page_link in tqdm(enumerate(all_links), total=len(all_links)):     
-        try: 
-            logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
-            for (k, v) in encode(page_link, picker, **kwargs).items(): 
-                result[k].append(v)
+        for attempt in range(max_retries):
+            try: 
+                # Add a small random delay before each request
+                time.sleep(random.uniform(1, 3))
+                
+                logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
+                encoded_data = encode(page_link, picker, **kwargs)
+                for (k, v) in encoded_data.items(): 
+                    result[k].append(v)
 
-            if (i + 1) % 10 == 0:  # Save every 10 iterations
-                save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
+                if (i + 1) % 10 == 0:  # Save every 10 iterations
+                    save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
+                
+                break  # If successful, break out of the retry loop
 
-        except Exception as e: 
-            logging.error(f"Error processing link {page_link}: {e}")
-            if ignore_error:
-                continue
-            else:
-                logging.error("Stopping due to error and ignore_error=False")
-                break
+            except Exception as e:
+                if "quota" in str(e).lower() or (hasattr(e, 'response') and getattr(e.response, 'status_code', None) == 429):
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                        logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                        time.sleep(delay)
+                    else:
+                        logging.error(f"Max retries reached for link {page_link}. Moving to next link.")
+                        break
+                else:
+                    logging.error(f"Error processing link {page_link}: {e}")
+                    if not ignore_error:
+                        logging.error("Stopping due to error and ignore_error=False")
+                        return result
+                    break  # Move to next link if ignore_error is True
 
     return result
 

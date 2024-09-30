@@ -137,7 +137,8 @@ def reduce(main_link:str,
     max_retries = 20
     base_delay = 5  # Initial delay in seconds
     
-    for i, page_link in tqdm(enumerate(all_links), total=len(all_links)):     
+    progress_bar = tqdm(all_links, total=len(all_links), desc="Processing links")
+    for i, page_link in enumerate(progress_bar):     
         for attempt in range(max_retries):
             try: 
                 # Add a small random delay before each request
@@ -151,6 +152,7 @@ def reduce(main_link:str,
                 if (i + 1) % 10 == 0:  # Save every 10 iterations
                     save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
                 
+                progress_bar.set_postfix({"Status": "Success"})
                 break  # If successful, break out of the retry loop
 
             except Exception as e:
@@ -167,6 +169,7 @@ def reduce(main_link:str,
                     if not ignore_error:
                         logging.error("Stopping due to error and ignore_error=False")
                         return result
+                    progress_bar.set_postfix({"Status": "Error"})
                     break  # Move to next link if ignore_error is True
 
     return result

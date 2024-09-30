@@ -148,7 +148,7 @@ class GeminiInference():
     3. The first group usually has 3 characters (e.g., "1K2", "4H0").
     4. The second group usually has 3 digits (e.g., "820", "907").
     5. The third group usually has 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E").
-    6. Ignore any additional characters or version codes (e.g., "H03", "0012") that might appear after the main number.
+    6. Ignore any additional characters or version codes (e.g., "H03", "0012", "VW") that might appear before or after the main number.
 
     If the number follows these rules, respond with:
     <VALID>

@@ -156,7 +156,7 @@ class GeminiInference():
     If the number does not follow these rules or seems incorrect, respond with:
     <INVALID>
 
-    Explanation: [Brief explanation of why it's valid or invalid]
+    Explanation: [Brief explanation of why it's valid or invalid including the number itself]
     """
 
     response = self.validator_model.generate_content(prompt)

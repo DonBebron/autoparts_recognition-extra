@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV3Small
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout, BatchNormalization
 from tensorflow.keras.models import Model
+import numpy as np
 
 def build_model(num_classes) -> Model:
     """
@@ -68,6 +69,10 @@ class TargetModel(metaclass=RuntimeMeta):
   def do_inference_return_probs(self, image_links): 
     dataset = self.processor(image_links)
     predictions = self.model.predict(dataset)
+
+    # Add a small epsilon to avoid log(0) or division by zero
+    epsilon = 1e-10
+    predictions = np.clip(predictions, epsilon, 1 - epsilon)
 
     predictions = predictions.flatten().tolist() 
     predictions = [{'image_link': l, 'score': p} for l, p in zip(image_links, predictions)]

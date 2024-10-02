@@ -65,46 +65,64 @@ def parse_args():
             'max_links': args.max_links
          },)
 
+import math
+
 def encode(link:str, 
            picker:TargetModel, 
-           model:GeminiInference) -> dict: 
+           model:GeminiInference) -> dict:
     logging.info(f"Processing link: {link}")
-    page_img_links = picker.processor.parse_images_from_page(link)
-    page_img_links = list(set(page_img_links))
-    
-    logging.info(f"Found {len(page_img_links)} unique image links")
-    images_probs = picker.do_inference_return_probs(page_img_links)
-    for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]: 
-        logging.info(f'Predicting on image {target_image_link} with score {score}')
-        detail_number = str(model(target_image_link))
+    try:
+        page_img_links = picker.processor.parse_images_from_page(link)
+        page_img_links = list(set(page_img_links))
+        
+        logging.info(f"Found {len(page_img_links)} unique image links")
+        
+        try:
+            images_probs = picker.do_inference_return_probs(page_img_links)
+        except ValueError as ve:
+            if "math domain error" in str(ve).lower():
+                logging.warning(f"Math domain error occurred during inference. Using default probabilities.")
+                # Assign equal probabilities to all images
+                images_probs = [{'image_link': link, 'score': 1.0 / len(page_img_links)} for link in page_img_links]
+            else:
+                raise
+        
+        detail_number = 'none'
+        target_image_link = None
+        
+        for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]:
+            try:
+                logging.info(f'Predicting on image {target_image_link} with score {score}')
+                detail_number = str(model(target_image_link))
                 
-        if detail_number.lower().strip() == 'none'.lower(): 
-            logging.warning("Detail number not found, trying next image...")
-            continue
-        else: 
-            break
-    
-    if detail_number.lower().strip() == 'none'.lower(): 
-        logging.warning("No detail number found in any image, trying again...")
-        
-        for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]: 
-            logging.info(f'Retrying prediction on image {target_image_link} with score {score}')
-            detail_number = str(model(target_image_link))
-                    
-            if detail_number.lower().strip() == 'none'.lower(): 
-                logging.warning("Detail number not found, trying next image...")
+                if detail_number.lower().strip() != 'none':
+                    break
+            except Exception as e:
+                logging.warning(f"Error processing image {target_image_link}: {e}")
                 continue
-            else: 
-                break
         
-    logging.info(f"Predicted number id: {detail_number}")
+        if detail_number.lower().strip() == 'none':
+            logging.warning("No detail number found in any image")
+        
+        logging.info(f"Predicted number id: {detail_number}")
 
-    parsed_info = picker.processor.load_product_info(link)
-    return {"predicted_number": detail_number, 
+        parsed_info = picker.processor.load_product_info(link)
+        return {
+            "predicted_number": detail_number, 
             "url": link, 
-            "price": parsed_info['price'], 
+            "price": parsed_info.get('price', 'N/A'), 
             "correct_image_link": target_image_link, 
-            "incorrect_image_links": ", ".join([l for l in page_img_links if l != target_image_link])}
+            "incorrect_image_links": ", ".join([l for l in page_img_links if l != target_image_link])
+        }
+    except Exception as e:
+        logging.error(f"Error processing link {link}: {e}")
+        return {
+            "predicted_number": "ERROR", 
+            "url": link, 
+            "price": "N/A", 
+            "correct_image_link": "N/A", 
+            "incorrect_image_links": "N/A"
+        }
 
 def save_intermediate_results(result, filename):
     try:
@@ -121,7 +139,7 @@ def reduce(main_link:str,
            max_steps:int = 3, 
            max_links:int = 90, 
            savename:str = 'recognized_data', 
-           **kwargs): 
+           **kwargs):
     logging.info(f"Starting link collection from {main_link}")
     all_links = collect_links(picker, main_link, max_pages=max_steps, max_links=max_links)
     all_links = list(set(all_links))
@@ -154,21 +172,12 @@ def reduce(main_link:str,
                 break  # If successful, break out of the retry loop
 
             except Exception as e:
-                if "quota" in str(e).lower() or (hasattr(e, 'response') and getattr(e.response, 'status_code', None) == 429):
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                        logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
-                        time.sleep(delay)
-                    else:
-                        logging.error(f"Max retries reached for link {page_link}. Moving to next link.")
-                        break
-                else:
-                    logging.error(f"Error processing link {page_link}: {e}")
-                    if not ignore_error:
-                        logging.error("Stopping due to error and ignore_error=False")
-                        return result
-                    logging.warning("Ignoring error and moving to next link")
-                    break  # Move to next link if ignore_error is True
+                logging.error(f"Unexpected error processing link {page_link}: {e}")
+                if not ignore_error:
+                    logging.error("Stopping due to error and ignore_error=False")
+                    return result
+                logging.warning("Ignoring error and moving to next link")
+                break  # Move to next link if ignore_error is True
 
     return result
 

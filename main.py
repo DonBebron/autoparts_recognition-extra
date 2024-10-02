@@ -77,12 +77,21 @@ def encode(link:str,
         
         logging.info(f"Found {len(page_img_links)} unique image links")
         
+        if not page_img_links:
+            logging.warning(f"No images found for link: {link}")
+            return {
+                "predicted_number": "NO_IMAGES", 
+                "url": link, 
+                "price": "N/A", 
+                "correct_image_link": "N/A", 
+                "incorrect_image_links": "N/A"
+            }
+        
         try:
             images_probs = picker.do_inference_return_probs(page_img_links)
         except ValueError as ve:
             if "math domain error" in str(ve).lower():
                 logging.warning(f"Math domain error occurred during inference. Using default probabilities.")
-                # Assign equal probabilities to all images
                 images_probs = [{'image_link': link, 'score': 1.0 / len(page_img_links)} for link in page_img_links]
             else:
                 raise

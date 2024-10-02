@@ -101,53 +101,74 @@ class Processor(metaclass=RuntimeMeta):
         self.image_size = image_size
         self.batch_size = batch_size
         self.session = requests.Session()
-        self.ua = UserAgent()
-        self.headers_list = [
-            {
-                'User-Agent': self.ua.random,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Referer': 'https://auctions.yahoo.co.jp/',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Cache-Control': 'max-age=0',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-            } for _ in range(10)  # Create 10 different header combinations
+        
+        # Curated list of user agents known to work well with Yahoo Auctions
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59'
         ]
-
-    def get_page_content(self, url, verbose=0, max_retries=5):
-        """
-        Retrieve and parse product information from a given URL.
         
-        Args:
-            url (str): The URL of the page to scrape.
-            verbose (int): Verbosity level for logging.
-            max_retries (int): Maximum number of retry attempts.
+        self.headers_template = {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Accept-Language': 'en-US,en;q=0.9,ja;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://auctions.yahoo.co.jp/',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-User': '?1',
+        }
         
-        Yields:
-            tuple: A pair of (image_src, product_link) for each product found.
-        """
-        logging.info(f"Getting page content from: {url}")
+        self.successful_combinations = []
 
+    def get_headers(self):
+        headers = self.headers_template.copy()
+        headers['User-Agent'] = random.choice(self.user_agents)
+        return headers
+
+    def request_with_retry(self, url, max_retries=5):
         for attempt in range(max_retries):
-            headers = random.choice(self.headers_list)
-            headers['User-Agent'] = self.ua.random  # Use a new random user agent for each attempt
+            if self.successful_combinations and random.random() < 0.8:  # 80% chance to use a successful combination
+                headers = random.choice(self.successful_combinations)
+            else:
+                headers = self.get_headers()
 
             try:
-                # Add a delay before each request with exponential backoff
                 delay = (2 ** attempt) + random.random()
                 time.sleep(delay)
                 
                 response = self.session.get(url, headers=headers, timeout=15)
                 response.raise_for_status()
                 
-                soup = BeautifulSoup(response.content, 'html.parser')
+                # If successful, add this combination to the list
+                if headers not in self.successful_combinations:
+                    self.successful_combinations.append(headers)
                 
+                return response
+            
+            except requests.RequestException as e:
+                logging.error(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt == max_retries - 1:
+                    logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
+                    raise
+
+    def parse_images_from_page(self, page_url):
+        logging.info(f"Parsing images from page: {page_url}")
+        
+        try:
+            response = self.request_with_retry(page_url)
+        except requests.RequestException:
+            return []
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
                 # Try different selectors to find product items
                 product_items = (
                     soup.select('li.Product') or

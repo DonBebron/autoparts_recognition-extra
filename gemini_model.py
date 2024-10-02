@@ -87,6 +87,7 @@ class GeminiInference():
                                   safety_settings=safety_settings)
 
     self.validator_model = self.create_validator_model(model_name)
+    self.incorrect_predictions = []
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -148,7 +149,9 @@ class GeminiInference():
     3. The first group usually has 3 characters (e.g., "1K2", "4H0").
     4. The second group usually has 3 digits (e.g., "820", "907").
     5. The third group usually has 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E").
-    6. Ignore any additional characters or version codes (e.g., "H03", "0012", "VW AG") that might appear before or after the main number.
+    6. Ignore any additional characters or version codes (e.g., "H03", "0012") that might appear after the main number.
+
+    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
     If the number follows these rules, respond with:
     <VALID>
@@ -161,6 +164,9 @@ class GeminiInference():
 
     response = self.validator_model.generate_content(prompt)
     return response.text
+
+  def reset_incorrect_predictions(self):
+    self.incorrect_predictions = []
 
   def __call__(self, image_path):
 
@@ -182,14 +188,17 @@ class GeminiInference():
       if extracted_number.upper() != "NONE":
         validation_result = self.validate_number(extracted_number)
         if "<VALID>" in validation_result:
+          self.reset_incorrect_predictions()  # Reset for the next page
           return extracted_number
         else:
           print(f"First validation failed: {validation_result}")
+          self.incorrect_predictions.append(extracted_number)
           
           # Second attempt with a more specific prompt
           specific_prompt = f"""
           The previously extracted number "{extracted_number}" was invalid. 
           {validation_result}
+          Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
           Please re-examine the image carefully and try to identify a valid VAG part number.
           Remember, a valid VAG part number typically:
           - Consists of 9-11 characters
@@ -220,8 +229,11 @@ class GeminiInference():
           if second_extracted_number.upper() != "NONE":
             second_validation_result = self.validate_number(second_extracted_number)
             if "<VALID>" in second_validation_result:
+              self.reset_incorrect_predictions()  # Reset for the next page
               return second_extracted_number
             else:
               print(f"Second validation failed: {second_validation_result}")
-          
+              self.incorrect_predictions.append(second_extracted_number)
+      
+      self.reset_incorrect_predictions()  # Reset for the next page
       return "NONE"

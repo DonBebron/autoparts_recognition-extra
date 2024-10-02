@@ -199,17 +199,23 @@ class Processor(metaclass=RuntimeMeta):
 
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Focus specifically on ProductImage__images class
-        image_elements = soup.select('.ProductImage__images img')
+        # Try different selectors to find image elements
+        image_elements = (
+            soup.select('.ProductImage__images img') or
+            soup.select('.auction-item-image img') or
+            soup.select('img[src*="auctions.c.yimg.jp"]')
+        )
         
         if not image_elements:
-            logging.warning("No ProductImage__images elements found on the page.")
+            logging.warning("No image elements found on the page. Dumping HTML for inspection.")
+            with open('page_dump.html', 'w', encoding='utf-8') as f:
+                f.write(soup.prettify())
+            logging.warning("HTML dumped to page_dump.html")
         
         image_links = []
         for img in image_elements:
             src = img.get('src')
             if src:
-                # Check if the src is a relative URL
                 if src.startswith('//'):
                     src = 'https:' + src
                 elif not src.startswith('http'):

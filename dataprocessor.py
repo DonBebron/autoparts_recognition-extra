@@ -12,6 +12,7 @@ from io import BytesIO
 from bs4 import BeautifulSoup
 import time
 import random
+from fake_useragent import UserAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -99,10 +100,18 @@ class Processor(metaclass=RuntimeMeta):
         self.image_size = image_size
         self.batch_size = batch_size
         self.session = requests.Session()
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+        self.ua = UserAgent()
+        self.headers_list = [
+            {
+                'User-Agent': self.ua.random,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Referer': 'https://auctions.yahoo.co.jp/',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Cache-Control': 'max-age=0',
+            } for _ in range(10)  # Create 10 different header combinations
         ]
 
     def get_page_content(self, url, verbose=0, max_retries=5):
@@ -118,18 +127,11 @@ class Processor(metaclass=RuntimeMeta):
             tuple: A pair of (image_src, product_link) for each product found.
         """
         logging.info(f"Getting page content from: {url}")
-        headers = {
-            'User-Agent': random.choice(self.user_agents),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://auctions.yahoo.co.jp/',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'max-age=0',
-        }
 
         for attempt in range(max_retries):
+            headers = random.choice(self.headers_list)
+            headers['User-Agent'] = self.ua.random  # Use a new random user agent for each attempt
+
             try:
                 # Add a delay before each request with exponential backoff
                 delay = (2 ** attempt) + random.random()

@@ -105,13 +105,18 @@ class Processor(metaclass=RuntimeMeta):
         self.headers_list = [
             {
                 'User-Agent': self.ua.random,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Referer': 'https://auctions.yahoo.co.jp/',
                 'DNT': '1',
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
                 'Cache-Control': 'max-age=0',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
             } for _ in range(10)  # Create 10 different header combinations
         ]
 
@@ -170,7 +175,7 @@ class Processor(metaclass=RuntimeMeta):
                     logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
                     return
 
-    def parse_images_from_page(self, page_url):
+    def parse_images_from_page(self, page_url, max_retries=5):
         """
         Extract image links from a given page URL, focusing on the "ProductImage__images" class.
         
@@ -182,15 +187,21 @@ class Processor(metaclass=RuntimeMeta):
         """
         logging.info(f"Parsing images from page: {page_url}")
         headers = random.choice(self.headers_list)
-        headers['User-Agent'] = self.ua.random
+        headers['User-Agent'] = self.ua.random  # Use a new random user agent for each request
 
-        try:
-            time.sleep(random.uniform(1, 3))
-            response = self.session.get(page_url, headers=headers, timeout=15)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            logging.error(f"Failed to retrieve the webpage: {e}")
-            return []
+        for attempt in range(max_retries):
+            try:
+                time.sleep(random.uniform(2, 5))  # Increased delay to appear more human-like
+                response = self.session.get(page_url, headers=headers, timeout=15)
+                response.raise_for_status()
+            except requests.RequestException as e:
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.random()
+                    logging.warning(f"Request failed. Retrying in {wait_time:.2f} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
+                    return []
 
         soup = BeautifulSoup(response.content, 'html.parser')
         

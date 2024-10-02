@@ -200,54 +200,39 @@ class Processor(metaclass=RuntimeMeta):
 
         soup = BeautifulSoup(response.content, 'html.parser')
         
+        image_links = []
+
         # Find images in classes containing "ProductImage"
         product_image_elements = soup.find_all(class_=lambda x: x and 'ProductImage' in x)
-        image_elements = []
         
         if product_image_elements:
             for element in product_image_elements:
-                image_elements.extend(element.find_all('img'))
-            if image_elements:
-                logging.info(f"Found {len(image_elements)} images in classes containing 'ProductImage'")
-            else:
-                logging.warning("Classes containing 'ProductImage' found, but no images within them")
+                imgs = element.find_all('img')
+                for img in imgs:
+                    src = img.get('src') or img.get('data-src')
+                    if src:
+                        image_links.append(src)
+            logging.info(f"Found {len(image_links)} images in classes containing 'ProductImage'")
         else:
             logging.warning("No classes containing 'ProductImage' found on the page")
-        
-        if not image_elements:
-            logging.warning("No images found in ProductImage classes. Dumping HTML for inspection.")
-            with open('page_dump.html', 'w', encoding='utf-8') as f:
-                f.write(soup.prettify())
-            logging.warning("HTML dumped to page_dump.html")
-        
-        image_links = []
-        for img in image_elements:
-            src = img.get('src') or img.get('data-src')
-            if src:
-                if src.startswith('//'):
-                    src = 'https:' + src
-                elif not src.startswith('http'):
-                    src = 'https://auctions.yahoo.co.jp' + src
-                image_links.append(src)
-            else:
-                logging.warning(f"Found image without src attribute: {img}")
-        
-        unique_links = list(set(image_links))
+
+        # Process and clean up image links
+        cleaned_links = []
+        for src in image_links:
+            if src.startswith('//'):
+                src = 'https:' + src
+            elif not src.startswith('http'):
+                src = 'https://auctions.yahoo.co.jp' + src
+            cleaned_links.append(src)
+
+        unique_links = list(set(cleaned_links))
         logging.info(f"Found {len(unique_links)} unique image links")
         
         if not unique_links:
-            logging.warning("No image links found. Attempting to parse JavaScript variables.")
-            # Look for JavaScript variables that might contain image URLs
-            scripts = soup.find_all('script')
-            for script in scripts:
-                script_text = script.string
-                if script_text:
-                    # Look for patterns like "imageUrl": "https://..."
-                    matches = re.findall(r'"imageUrl"\s*:\s*"(https?://[^"]+)"', script_text)
-                    unique_links.extend(matches)
-            
-            unique_links = list(set(unique_links))
-            logging.info(f"Found {len(unique_links)} unique image links from JavaScript variables")
+            logging.warning("No images found. Dumping HTML for inspection.")
+            with open('page_dump.html', 'w', encoding='utf-8') as f:
+                f.write(soup.prettify())
+            logging.warning("HTML dumped to page_dump.html")
         
         return unique_links
 

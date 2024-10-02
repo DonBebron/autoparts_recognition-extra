@@ -100,14 +100,38 @@ class Processor(metaclass=RuntimeMeta):
         self.image_size = image_size
         self.batch_size = batch_size
         self.session = requests.Session()
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36'
-        ]
+        self.user_agents = self.generate_similar_user_agents()
         self.headers_list = self.generate_headers_list()
+
+    def generate_similar_user_agents(self, num_agents=10):
+        """Generate user agents similar to the successful ones."""
+        base_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{firefox_version}) Gecko/20100101 Firefox/{firefox_version}',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{mac_version}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{safari_version} Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36 Edg/{edge_version}',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36'
+        ]
+        
+        user_agents = []
+        for _ in range(num_agents):
+            template = random.choice(base_agents)
+            chrome_version = f"{random.randint(90, 100)}.0.{random.randint(4000, 5000)}.{random.randint(100, 200)}"
+            firefox_version = f"{random.randint(85, 95)}.0"
+            mac_version = f"{random.randint(14, 15)}_{random.randint(0, 7)}"
+            safari_version = f"{random.randint(14, 15)}.{random.randint(0, 3)}"
+            edge_version = f"{random.randint(90, 100)}.0.{random.randint(800, 1000)}.{random.randint(50, 100)}"
+            
+            user_agent = template.format(
+                chrome_version=chrome_version,
+                firefox_version=firefox_version,
+                mac_version=mac_version,
+                safari_version=safari_version,
+                edge_version=edge_version
+            )
+            user_agents.append(user_agent)
+        
+        return user_agents
 
     def generate_headers_list(self):
         """Generate a list of headers with different user agents."""

@@ -172,8 +172,7 @@ class Processor(metaclass=RuntimeMeta):
 
     def parse_images_from_page(self, page_url):
         """
-        Extract image links from a given page URL, focusing first on "ProductImage__images" class,
-        then on "slick-track" class if the first attempt fails.
+        Extract image links from a given page URL, focusing on classes that contain "ProductImage" in their name.
         
         Args:
             page_url (str): The URL of the page to parse.
@@ -201,33 +200,22 @@ class Processor(metaclass=RuntimeMeta):
 
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # First, try to find images in ProductImage__images
-        product_images = soup.find('div', class_='ProductImage__images')
+        # Find images in classes containing "ProductImage"
+        product_image_elements = soup.find_all(class_=lambda x: x and 'ProductImage' in x)
         image_elements = []
         
-        if product_images:
-            image_elements = product_images.find_all('img')
+        if product_image_elements:
+            for element in product_image_elements:
+                image_elements.extend(element.find_all('img'))
             if image_elements:
-                logging.info("Found images in ProductImage__images class")
+                logging.info(f"Found {len(image_elements)} images in classes containing 'ProductImage'")
             else:
-                logging.warning("ProductImage__images class found, but no images within it")
+                logging.warning("Classes containing 'ProductImage' found, but no images within them")
         else:
-            logging.warning("ProductImage__images class not found on the page")
-        
-        # If no images found in ProductImage__images, try slick-track
-        if not image_elements:
-            slick_track = soup.find('div', class_='slick-track')
-            if slick_track:
-                image_elements = slick_track.find_all('img')
-                if image_elements:
-                    logging.info("Found images in slick-track class")
-                else:
-                    logging.warning("slick-track class found, but no images within it")
-            else:
-                logging.warning("slick-track class not found on the page")
+            logging.warning("No classes containing 'ProductImage' found on the page")
         
         if not image_elements:
-            logging.warning("No images found in ProductImage__images or slick-track classes. Dumping HTML for inspection.")
+            logging.warning("No images found in ProductImage classes. Dumping HTML for inspection.")
             with open('page_dump.html', 'w', encoding='utf-8') as f:
                 f.write(soup.prettify())
             logging.warning("HTML dumped to page_dump.html")

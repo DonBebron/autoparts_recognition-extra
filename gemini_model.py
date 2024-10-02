@@ -10,44 +10,36 @@ import requests
 
 DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 
-**Note:** This algorithm is specifically designed to identify and verify VAG part numbers. Assume all part numbers belong to VAG by default.
+**Note:** This algorithm is designed to identify and verify VAG part numbers. Assume all part numbers belong to VAG by default.
 
 1. **Identify Potential Numbers on the Photo:**
-   - **Examine All Numbers:** Carefully inspect the image for various numbers and markings.
-   - **Identify Numbers Resembling Catalog Numbers:** Look for numbers with a structured format that includes a combination of digits and letters, often separated into groups (e.g., `1K2 820 015 C`). This format is typical for parts catalog numbers.
-   - **Clarification:** Focus on numbers that fit the standard format (three groups of characters) and avoid mistaking additional characters or version codes (e.g., "H03" or "0012") as part of the primary catalog number. 
+   - Examine all numbers and markings in the image.
+   - Look for numbers that resemble catalog numbers, which typically include combinations of digits and letters.
 
 2. **Analyze the Structure of the Numbers:**
-   - **Catalog Numbers (Part Numbers):** These numbers typically consist of 9-10 characters, divided into groups, each carrying specific information:
-     - **First Group:** Indicates the car model or platform (e.g., "1K2" for VW Golf V).
-     - **Second Group:** Describes the type of part (e.g., "820" for air conditioning systems).
-     - **Third Group:** Refers to the version or modification of the part.
-   - **OEM Numbers:** OEM (Original Equipment Manufacturer) numbers may not follow these rules, often start with letters, have a less structured appearance, and may be accompanied by the manufacturer's logo.
-   - **Clarification:** Avoid including version or revision codes (e.g., "H03", "0012") within the primary catalog number unless it's specifically relevant to the core part number format.
+   - VAG Catalog Numbers (Part Numbers) typically consist of 10-11 characters.
+   - They are often, but not always, divided into visible groups.
+   - The structure usually follows this pattern:
+     - First part: 3 characters (e.g., "5Q0", "8S0")
+     - Middle part: 3 digits (e.g., "937", "907")
+     - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
 
 3. **Determine the Brand by the Numbers:**
-   - **VAG Numbers:** Numbers that follow the Volkswagen Audi Group (VAG) standard adhere to the structure described above. These numbers often do not have logos from third-party manufacturers.
-   - **OEM Numbers:** If the number is accompanied by a third-party manufacturer's logo (e.g., Valeo), and the number does not follow the standard VAG format, it is likely an OEM number.
-   - **Clarification:** Prioritize the identification of the main VAG catalog number (e.g., "4H0 907 801 E") and treat any additional characters (e.g., "0012", "H03") as supplementary information, not as part of the main catalog number.
+   - VAG Numbers: Numbers that closely follow the structure described above are likely VAG numbers.
+   - OEM Numbers: If the number is accompanied by a third-party manufacturer's logo and doesn't follow the VAG format, it's likely an OEM number.
 
 4. **Verify the Accuracy of the Number:**
-   - **Match with Known Formats:** Compare the identified number with commonly accepted formats for the brand. For example, VAG numbers should adhere to the standard format described above.
-   - **Check Against Catalogs:** If possible, use an official parts catalog to verify the number. Enter the number into the catalog's search system to ensure it corresponds to the correct part.
-   - **Compare with Other Numbers:** If multiple numbers are present on the part, ensure that the number you have identified matches the described format and is the primary catalog number, not the OEM number.
-   - **Clarification:** When comparing numbers, ensure that you separate the core catalog number from any additional version codes or supplementary characters.
+   - Match with Known Formats: Compare the identified number with the VAG format described above.
+   - Check for Consistency: Ensure the number maintains a consistent structure throughout.
 
 5. **Final Check and Marking:**
-   - **Absence of Third-Party Logos:** Ensure that the number you believe to be the catalog number is not accompanied by a third-party manufacturer's logo (if it is supposed to be an original VAG number).
-   - **Logical Placement:** The catalog number is usually placed in a prominent location or on the main part of the label, making it easier to identify.
-   - **Clarification:** Focus on the number in the main location (often near the brand's logo) as the primary catalog number and treat additional codes as supplementary, ensuring they don't replace the main number.
-
-
-
+   - Ensure the number is not accompanied by a third-party manufacturer's logo (for VAG numbers).
+   - The catalog number is usually placed in a prominent location on the label.
 
 Please follow the above steps to recognize the correct detail number and format the response as follows:
 
 **Response Format:**
-- If a part number is identified: `<START> [Toyota Part Number] <END>`
+- If a part number is identified: `<START> [VAG Part Number] <END>`
 - If no valid number is identified: `<START> NONE <END>`
 """
 
@@ -144,12 +136,13 @@ class GeminiInference():
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
     Rules for validation:
-    1. The number should typically consist of 9-11 characters.
-    2. It should be divided into three groups, separated by spaces.
-    3. The first group usually has 3 characters (e.g., "1K2", "4H0").
-    4. The second group usually has 3 digits (e.g., "820", "907").
-    5. The third group usually has 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E").
-    6. Ignore any additional characters or version codes (e.g., "H03", "0012") that might appear after the main number.
+    1. The number should consist of 10-11 characters.
+    2. It may or may not be visibly divided into groups.
+    3. The structure should closely follow this pattern:
+       - First part: 3 characters (e.g., "5Q0", "8S0")
+       - Middle part: 3 digits (e.g., "937", "907")
+       - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+    4. The entire number may be continuous without spaces, but should still follow the above structure.
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 

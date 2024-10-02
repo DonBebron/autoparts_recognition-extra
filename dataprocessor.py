@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 from fake_useragent import UserAgent
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -171,17 +172,18 @@ class Processor(metaclass=RuntimeMeta):
 
     def parse_images_from_page(self, page_url):
         """
-        Extract image links from a given page URL, focusing on ProductImage__images class.
+        Extract image links from a given page URL, focusing first on "ProductImage__images" class,
+        then on "slick-track" class if the first attempt fails.
         
         Args:
             page_url (str): The URL of the page to parse.
         
         Returns:
-            list: A list of unique image URLs found on the page.
+            list: A list of unique image URLs found within the specified classes.
         """
         logging.info(f"Parsing images from page: {page_url}")
         headers = {
-            'User-Agent': self.ua.random,  # Use the UserAgent object to generate a random user agent
+            'User-Agent': self.ua.random,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Referer': 'https://auctions.yahoo.co.jp/',
@@ -199,22 +201,40 @@ class Processor(metaclass=RuntimeMeta):
 
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Try different selectors to find image elements
-        image_elements = (
-            soup.select('.ProductImage__images img') or
-            soup.select('.auction-item-image img') or
-            soup.select('img[src*="auctions.c.yimg.jp"]')
-        )
+        # First, try to find images in ProductImage__images
+        product_images = soup.find('div', class_='ProductImage__images')
+        image_elements = []
+        
+        if product_images:
+            image_elements = product_images.find_all('img')
+            if image_elements:
+                logging.info("Found images in ProductImage__images class")
+            else:
+                logging.warning("ProductImage__images class found, but no images within it")
+        else:
+            logging.warning("ProductImage__images class not found on the page")
+        
+        # If no images found in ProductImage__images, try slick-track
+        if not image_elements:
+            slick_track = soup.find('div', class_='slick-track')
+            if slick_track:
+                image_elements = slick_track.find_all('img')
+                if image_elements:
+                    logging.info("Found images in slick-track class")
+                else:
+                    logging.warning("slick-track class found, but no images within it")
+            else:
+                logging.warning("slick-track class not found on the page")
         
         if not image_elements:
-            logging.warning("No image elements found on the page. Dumping HTML for inspection.")
+            logging.warning("No images found in ProductImage__images or slick-track classes. Dumping HTML for inspection.")
             with open('page_dump.html', 'w', encoding='utf-8') as f:
                 f.write(soup.prettify())
             logging.warning("HTML dumped to page_dump.html")
         
         image_links = []
         for img in image_elements:
-            src = img.get('src')
+            src = img.get('src') or img.get('data-src')
             if src:
                 if src.startswith('//'):
                     src = 'https:' + src
@@ -226,6 +246,21 @@ class Processor(metaclass=RuntimeMeta):
         
         unique_links = list(set(image_links))
         logging.info(f"Found {len(unique_links)} unique image links")
+        
+        if not unique_links:
+            logging.warning("No image links found. Attempting to parse JavaScript variables.")
+            # Look for JavaScript variables that might contain image URLs
+            scripts = soup.find_all('script')
+            for script in scripts:
+                script_text = script.string
+                if script_text:
+                    # Look for patterns like "imageUrl": "https://..."
+                    matches = re.findall(r'"imageUrl"\s*:\s*"(https?://[^"]+)"', script_text)
+                    unique_links.extend(matches)
+            
+            unique_links = list(set(unique_links))
+            logging.info(f"Found {len(unique_links)} unique image links from JavaScript variables")
+        
         return unique_links
 
     def load_product_info(self, url):

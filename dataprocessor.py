@@ -181,7 +181,7 @@ class Processor(metaclass=RuntimeMeta):
         """
         logging.info(f"Parsing images from page: {page_url}")
         headers = {
-            'User-Agent': random.choice(self.user_agents),
+            'User-Agent': self.ua.random,  # Use the UserAgent object to generate a random user agent
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Referer': 'https://auctions.yahoo.co.jp/',

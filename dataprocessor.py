@@ -101,7 +101,7 @@ class Processor(metaclass=RuntimeMeta):
         self.image_size = image_size
         self.batch_size = batch_size
         self.session = requests.Session()
-        self.ua = UserAgent(verify_ssl=False)
+        self.ua = UserAgent()
         self.headers_list = self.generate_headers_list()
 
     def generate_headers_list(self):

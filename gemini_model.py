@@ -7,6 +7,7 @@ import random
 
 from PIL import Image
 import requests
+import re
 
 DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 
@@ -31,10 +32,14 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 4. **Verify the Accuracy of the Number:**
    - Match with Known Formats: Compare the identified number with the VAG format described above.
    - Check for Consistency: Ensure the number maintains a consistent structure throughout.
+   - Pay special attention to the last part of the number:
+     - It should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+     - If it ends with a single letter, make sure it's not missing (e.g., "T" at the end)
 
 5. **Final Check and Marking:**
    - Ensure the number is not accompanied by a third-party manufacturer's logo (for VAG numbers).
    - The catalog number is usually placed in a prominent location on the label.
+   - Double-check that you haven't included any extra digits or characters that don't belong to the actual part number.
 
 Please follow the above steps to recognize the correct detail number and format the response as follows:
 
@@ -167,6 +172,8 @@ class GeminiInference():
        - '9' and '8' can be easily confused
        - '0' and 'O' (letter O) should not be mixed up
        - '1' and 'I' (letter I) should not be confused
+    6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+    7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
@@ -184,14 +191,18 @@ class GeminiInference():
 
   def double_check_confused_digits(self, extracted_number):
     prompt = f"""
-    Double-check the following VAG part number for commonly confused digits: {extracted_number}
+    Double-check the following VAG part number for commonly confused digits and potential errors: {extracted_number}
 
     Focus on:
     1. '9' vs '8': Ensure these are correctly identified.
     2. '0' vs 'O': Confirm all instances are digits, not letters.
     3. '1' vs 'I': Verify these are correctly distinguished.
+    4. Check the last part of the number:
+       - It should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+       - If it ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+    5. Ensure no extra digits or characters are included that don't belong to the actual part number.
 
-    If you believe any digits might be incorrect, suggest the most likely correct version.
+    If you believe any digits might be incorrect or if there are any other issues, suggest the most likely correct version.
 
     Response format:
     <CORRECTED> [Corrected number if changes are needed]

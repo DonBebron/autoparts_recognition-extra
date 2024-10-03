@@ -128,8 +128,23 @@ class GeminiInference():
     
     raise Exception("Max retries reached. Unable to get a response.")
 
+  def format_part_number(self, number):
+    # Remove any existing hyphens
+    number = number.replace('-', '')
+    
+    # Split the number into groups
+    groups = [number[:3], number[3:6], number[6:9], number[9:]]
+    
+    # Join the groups with spaces
+    formatted_number = ' '.join(group for group in groups if group)
+    
+    return formatted_number.strip()
+
   def extract_number(self, response):
-    return response.split('<START>')[-1].split("<END>")[0].strip()
+    number = response.split('<START>')[-1].split("<END>")[0].strip()
+    if number.upper() != "NONE":
+      return self.format_part_number(number)
+    return number
 
   def validate_number(self, extracted_number):
     prompt = f"""

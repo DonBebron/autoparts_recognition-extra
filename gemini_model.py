@@ -143,6 +143,10 @@ class GeminiInference():
        - Middle part: 3 digits (e.g., "937", "907")
        - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
     4. The entire number may be continuous without spaces, but should still follow the above structure.
+    5. Pay extra attention to commonly confused digits:
+       - '9' and '8' can be easily confused
+       - '0' and 'O' (letter O) should not be mixed up
+       - '1' and 'I' (letter I) should not be confused
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
@@ -153,6 +157,28 @@ class GeminiInference():
     <INVALID>
 
     Explanation: [Brief explanation of why it's valid or invalid including the number itself]
+    """
+
+    response = self.validator_model.generate_content(prompt)
+    return response.text
+
+  def double_check_confused_digits(self, extracted_number):
+    prompt = f"""
+    Double-check the following VAG part number for commonly confused digits: {extracted_number}
+
+    Focus on:
+    1. '9' vs '8': Ensure these are correctly identified.
+    2. '0' vs 'O': Confirm all instances are digits, not letters.
+    3. '1' vs 'I': Verify these are correctly distinguished.
+
+    If you believe any digits might be incorrect, suggest the most likely correct version.
+
+    Response format:
+    <CORRECTED> [Corrected number if changes are needed]
+    or
+    <UNCHANGED> [Original number if no changes are needed]
+
+    Explanation: [Brief explanation of any changes or why no changes were needed]
     """
 
     response = self.validator_model.generate_content(prompt)
@@ -181,8 +207,16 @@ class GeminiInference():
       if extracted_number.upper() != "NONE":
         validation_result = self.validate_number(extracted_number)
         if "<VALID>" in validation_result:
-          self.reset_incorrect_predictions()  # Reset for the next page
-          return extracted_number
+          # Add an extra check for commonly confused digits
+          double_check_result = self.double_check_confused_digits(extracted_number)
+          if "<CORRECTED>" in double_check_result:
+            corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
+            print(f"Number corrected after double-check: {corrected_number}")
+            self.reset_incorrect_predictions()
+            return corrected_number
+          elif "<UNCHANGED>" in double_check_result:
+            self.reset_incorrect_predictions()
+            return extracted_number
         else:
           print(f"First validation failed: {validation_result}")
           self.incorrect_predictions.append(extracted_number)

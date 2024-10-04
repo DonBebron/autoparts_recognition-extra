@@ -21,9 +21,9 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
    - VAG Catalog Numbers (Part Numbers) typically consist of 10-11 characters.
    - They are often, but not always, divided into visible groups.
    - The structure usually follows this pattern:
-     - First part: 3 characters (e.g., "5Q0", "8S0", "4H0")
+     - First part: 3 characters (e.g., "5Q0", "8K5", "4H0")
      - Middle part: 3 digits (e.g., "937", "907")
-     - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D", "064 BP")
+     - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D", "064 BP", "115 H")
 
 3. **Determine the Brand by the Numbers:**
    - VAG Numbers: Numbers that closely follow the structure described above are likely VAG numbers.
@@ -34,10 +34,10 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
    - Check for Consistency: Ensure the number maintains a consistent structure throughout.
    - Pay special attention to the first and last parts of the number:
      - The first part should always be 3 characters long and typically starts with a digit followed by two characters (e.g., "4H0", "1K0")
-     - The last part should be 3-4 characters long, and may include a space before the last letter(s) (e.g., "064 BP", "085B")
+     - The last part should be 3-5 characters long, and may include a space before the last letter(s) (e.g., "064 BP", "085B")
    - Be cautious of common misreadings:
-     - Avoid confusing "1" with "I" or "0" with "O"
-     - Double-check the difference between similar-looking digits like "0" and "8", or "1" and "7"
+     - Avoid confusing "1" with "I" or "0" with "O" etc
+     - Double-check the difference between similar-looking digits like "0" and "8", or "1" and "7" etc
 
 5. **Final Check and Marking:**
    - Ensure the number is not accompanied by a third-party manufacturer's logo (for VAG numbers).

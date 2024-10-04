@@ -71,67 +71,81 @@ def encode(link:str,
            picker:TargetModel, 
            model:GeminiInference) -> dict:
     logging.info(f"Processing link: {link}")
-    try:
-        page_img_links = picker.processor.parse_images_from_page(link)
-        page_img_links = list(set(page_img_links))
-        
-        logging.info(f"Found {len(page_img_links)} unique image links")
-        
-        if not page_img_links:
-            logging.warning(f"No images found for link: {link}")
-            return {
-                "predicted_number": "NO_IMAGES", 
-                "url": link, 
-                "price": "N/A", 
-                "correct_image_link": "N/A", 
-                "incorrect_image_links": "N/A"
-            }
-        
-        try:
-            images_probs = picker.do_inference_return_probs(page_img_links)
-        except ValueError as ve:
-            if "math domain error" in str(ve).lower():
-                logging.warning(f"Math domain error occurred during inference. Using default probabilities.")
-                images_probs = [{'image_link': link, 'score': 1.0 / len(page_img_links)} for link in page_img_links]
-            else:
-                raise
-        
-        detail_number = 'none'
-        target_image_link = None
-        
-        for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]:
-            try:
-                logging.info(f'Predicting on image {target_image_link} with score {score}')
-                detail_number = str(model(target_image_link))
-                
-                if detail_number.lower().strip() != 'none':
-                    break
-            except Exception as e:
-                logging.warning(f"Error processing image {target_image_link}: {e}")
-                continue
-        
-        if detail_number.lower().strip() == 'none':
-            logging.warning("No detail number found in any image")
-        
-        logging.info(f"Predicted number id: {detail_number}")
+    max_retries = 3
+    base_delay = 5
 
-        parsed_info = picker.processor.load_product_info(link)
-        return {
-            "predicted_number": detail_number, 
-            "url": link, 
-            "price": parsed_info.get('price', 'N/A'), 
-            "correct_image_link": target_image_link, 
-            "incorrect_image_links": ", ".join([l for l in page_img_links if l != target_image_link])
-        }
-    except Exception as e:
-        logging.error(f"Error processing link {link}: {e}")
-        return {
-            "predicted_number": "ERROR", 
-            "url": link, 
-            "price": "N/A", 
-            "correct_image_link": "N/A", 
-            "incorrect_image_links": "N/A"
-        }
+    for attempt in range(max_retries):
+        try:
+            page_img_links = picker.processor.parse_images_from_page(link)
+            page_img_links = list(set(page_img_links))
+            
+            logging.info(f"Found {len(page_img_links)} unique image links")
+            
+            if not page_img_links:
+                logging.warning(f"No images found for link: {link}")
+                return {
+                    "predicted_number": "NO_IMAGES", 
+                    "url": link, 
+                    "price": "N/A", 
+                    "correct_image_link": "N/A", 
+                    "incorrect_image_links": "N/A"
+                }
+            
+            try:
+                images_probs = picker.do_inference_return_probs(page_img_links)
+            except ValueError as ve:
+                if "math domain error" in str(ve).lower():
+                    logging.warning(f"Math domain error occurred during inference. Using default probabilities.")
+                    images_probs = [{'image_link': link, 'score': 1.0 / len(page_img_links)} for link in page_img_links]
+                else:
+                    raise
+            
+            detail_number = 'none'
+            target_image_link = None
+            
+            for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]:
+                try:
+                    logging.info(f'Predicting on image {target_image_link} with score {score}')
+                    detail_number = str(model(target_image_link))
+                    
+                    if detail_number.lower().strip() != 'none':
+                        break
+                except Exception as e:
+                    if "429 Resource has been exhausted" in str(e):
+                        delay = base_delay + random.uniform(0, 2)
+                        logging.warning(f"429 error encountered. Retrying in {delay:.2f} seconds...")
+                        time.sleep(delay)
+                        continue
+                    logging.warning(f"Error processing image {target_image_link}: {e}")
+                    continue
+            
+            if detail_number.lower().strip() == 'none':
+                logging.warning("No detail number found in any image")
+            
+            logging.info(f"Predicted number id: {detail_number}")
+
+            parsed_info = picker.processor.load_product_info(link)
+            return {
+                "predicted_number": detail_number, 
+                "url": link, 
+                "price": parsed_info.get('price', 'N/A'), 
+                "correct_image_link": target_image_link, 
+                "incorrect_image_links": ", ".join([l for l in page_img_links if l != target_image_link])
+            }
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = base_delay + random.uniform(0, 2)
+                logging.warning(f"Error occurred: {e}. Retrying in {delay:.2f} seconds... (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                logging.error(f"Error processing link {link} after {max_retries} attempts: {e}")
+                return {
+                    "predicted_number": "ERROR", 
+                    "url": link, 
+                    "price": "N/A", 
+                    "correct_image_link": "N/A", 
+                    "incorrect_image_links": "N/A"
+                }
 
 def save_intermediate_results(result, filename):
     try:

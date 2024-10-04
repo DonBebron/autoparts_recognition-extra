@@ -71,6 +71,9 @@ def encode(link:str,
            picker:TargetModel, 
            model:GeminiInference) -> dict:
     logging.info(f"Processing link: {link}")
+    max_retries = 20
+    base_delay = 5  # Initial delay in seconds
+
     try:
         page_img_links = picker.processor.parse_images_from_page(link)
         page_img_links = list(set(page_img_links))
@@ -100,15 +103,24 @@ def encode(link:str,
         target_image_link = None
         
         for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]:
-            try:
-                logging.info(f'Predicting on image {target_image_link} with score {score}')
-                detail_number = str(model(target_image_link))
-                
-                if detail_number.lower().strip() != 'none':
-                    break
-            except Exception as e:
-                logging.warning(f"Error processing image {target_image_link}: {e}")
-                continue
+            for attempt in range(max_retries):
+                try:
+                    logging.info(f'Predicting on image {target_image_link} with score {score}')
+                    detail_number = str(model(target_image_link))
+                    
+                    if detail_number.lower().strip() != 'none':
+                        break
+                except Exception as e:
+                    if "quota" in str(e).lower() or "resource exhausted" in str(e).lower():
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                        logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                        time.sleep(delay)
+                    else:
+                        logging.warning(f"Error processing image {target_image_link}: {e}")
+                        break  # Break the retry loop for non-quota errors
+            
+            if detail_number.lower().strip() != 'none':
+                break  # Break the outer loop if we found a valid detail number
         
         if detail_number.lower().strip() == 'none':
             logging.warning("No detail number found in any image")

@@ -254,9 +254,15 @@ class GeminiInference():
                 if "<CORRECTED>" in double_check_result:
                     corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
                     print(f"Number corrected after double-check: {corrected_number}")
-                    self.reset_incorrect_predictions()
-                    self.prompt = original_prompt  # Reset prompt to original
-                    return corrected_number
+                    # Validate the corrected number
+                    final_validation = self.validate_number(corrected_number)
+                    if "<VALID>" in final_validation:
+                        self.reset_incorrect_predictions()
+                        self.prompt = original_prompt  # Reset prompt to original
+                        return corrected_number
+                    else:
+                        print(f"Corrected number failed validation: {final_validation}")
+                        self.incorrect_predictions.append(corrected_number)
                 elif "<UNCHANGED>" in double_check_result:
                     self.reset_incorrect_predictions()
                     self.prompt = original_prompt  # Reset prompt to original

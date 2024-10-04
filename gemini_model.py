@@ -285,8 +285,8 @@ class GeminiInference():
             Please re-examine the image carefully and try to identify a valid VAG part number.
             Focus on the following:
             1. Look for numbers that are larger or more prominent in the image.
-            2. Check for numbers near labels like "Part No.", "P/N", or similar identifiers.
-            3. Examine any barcodes or QR codes in the image, as the part number might be printed near them.
+            2. Try to look on the uppper part of the label.
+            3. Examine any barcodes in the image, as the part number might be printed above them.
             4. If there are multiple numbers, prioritize those that match the VAG part number format.
 
             Remember, a valid VAG part number typically:

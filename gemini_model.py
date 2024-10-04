@@ -238,6 +238,9 @@ class GeminiInference():
       raise FileNotFoundError(f"Could not find image: {img}")
 
     total_attempts = 0
+    none_count = 0
+    max_none_attempts = 3  # Maximum number of consecutive "NONE" responses before giving up
+
     while total_attempts < self.max_total_attempts:
         prompt_with_incorrect = f"{self.prompt}\n\nPreviously incorrect predictions: {', '.join(self.incorrect_predictions.keys())}"
 
@@ -245,7 +248,14 @@ class GeminiInference():
         extracted_number = self.extract_number(answer)
 
         if extracted_number.upper() == "NONE":
-            break
+            none_count += 1
+            if none_count >= max_none_attempts:
+                print(f"No valid numbers found after {none_count} consecutive attempts. Stopping.")
+                break
+            total_attempts += 1
+            continue
+
+        none_count = 0  # Reset the none_count if we get a non-NONE response
 
         if self.incorrect_predictions[extracted_number] >= self.max_attempts_per_number:
             print(f"Skipping previously incorrect prediction: {extracted_number}")

@@ -16,7 +16,8 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 1. **Identify Potential Numbers on the Photo:**
    - Examine all numbers and markings in the image carefully.
    - Look for numbers that resemble catalog numbers, which typically include combinations of digits and letters.
-
+   - Look for the numbers that are usually bigger and more likely to be the main catalog number
+   
 2. **Analyze the Structure of the Numbers:**
    - VAG Catalog Numbers (Part Numbers) typically consist of 10-11 characters.
    - They are often, but not always, divided into visible groups.
@@ -187,7 +188,7 @@ class GeminiInference():
     If the number does not follow these rules or seems incorrect, respond with:
     <INVALID>
 
-    If the number does not follow these rules at all, respond with (in the explanation ask model to look for the number in another section of the image):
+    If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line that might contain the part number (which is usually bigger)):
     <INVALID>
 
     Explanation: [Brief explanation of why it's valid or invalid including the number itself]

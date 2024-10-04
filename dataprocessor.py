@@ -109,32 +109,20 @@ class Processor(metaclass=RuntimeMeta):
             # {'http': 'http://10.10.1.11:3128', 'https': 'http://10.10.1.11:1080'},
         ]
 
-    def generate_similar_user_agents(self, num_agents=20):
-        """Generate a diverse set of realistic PC user agents."""
-        os_list = ['Windows NT 10.0', 'Windows NT 11.0', 'Macintosh; Intel Mac OS X 10_15', 'X11; Linux x86_64']
-        browser_list = ['Chrome', 'Firefox', 'Safari', 'Edge']
-        
-        user_agents = []
-        for _ in range(num_agents):
-            os = random.choice(os_list)
-            browser = random.choice(browser_list)
-            
-            if browser == 'Chrome':
-                chrome_version = f"{random.randint(90, 110)}.0.{random.randint(4000, 5000)}.{random.randint(100, 200)}"
-                user_agent = f"Mozilla/5.0 ({os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36"
-            elif browser == 'Firefox':
-                firefox_version = f"{random.randint(85, 105)}.0"
-                user_agent = f"Mozilla/5.0 ({os}; rv:{firefox_version}) Gecko/20100101 Firefox/{firefox_version}"
-            elif browser == 'Safari':
-                safari_version = f"{random.randint(605, 615)}.{random.randint(1, 3)}.{random.randint(1, 15)}"
-                user_agent = f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_{random.randint(1, 7)}) AppleWebKit/{safari_version} (KHTML, like Gecko) Version/{random.randint(14, 16)}.{random.randint(0, 3)} Safari/{safari_version}"
-            elif browser == 'Edge':
-                edge_version = f"{random.randint(90, 110)}.0.{random.randint(800, 1000)}.{random.randint(50, 100)}"
-                user_agent = f"Mozilla/5.0 ({os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{edge_version} Safari/537.36 Edg/{edge_version}"
-            
-            user_agents.append(user_agent)
-        
-        return user_agents
+    def generate_similar_user_agents(self):
+        """Generate a list of certainly working PC-like user agents."""
+        return [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36"
+        ]
 
     def generate_headers_list(self):
         """Generate a list of headers with different user agents and additional variations."""
@@ -186,13 +174,13 @@ class Processor(metaclass=RuntimeMeta):
 
         for attempt in range(max_retries):
             headers = random.choice(self.headers_list)
-            proxy = random.choice(self.proxies) if self.proxies else None
+            headers['User-Agent'] = random.choice(self.user_agents)  # Randomly select a user agent
             
             try:
                 delay = (2 ** attempt) + random.random()
                 time.sleep(delay)
                 
-                response = self.session.get(url, headers=headers, proxies=proxy, timeout=5)
+                response = self.session.get(url, headers=headers, timeout=10)
                 response.raise_for_status()
                 
                 soup = BeautifulSoup(response.content, 'html.parser')
@@ -218,10 +206,9 @@ class Processor(metaclass=RuntimeMeta):
                 # If we've successfully processed the page, break the retry loop
                 break
             
-            except (RequestException, ProxyError) as e:
+            except RequestException as e:
                 logging.error(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
                 logging.error(f"Headers used: {headers}")
-                logging.error(f"Proxy used: {proxy}")
                 if attempt == max_retries - 1:
                     logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
                     return

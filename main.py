@@ -31,7 +31,7 @@ def parse_args():
     
     parser.add_argument('--model', type=str, required=True, help="The name of the model to use, e.g., 'gemini'")
     parser.add_argument('--gemini-api', type=str, required=True, help="API key for the Gemini model")
-    parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-pro', required=False, help="Gemini model u going to use")
+    parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-flash', required=False, help="Gemini model u going to use")
     parser.add_argument('--prompt', type=str, default=None, required=False, help="source to txt file write prompt written inside")
     parser.add_argument('--first-page-link', type=str, default='https://injapan.ru/category/2084017018/currency-USD/mode-1/condition-used/page-1/sort-enddate/order-ascending.html', required=False, help="")
     parser.add_argument('--save-file-name', type=str, default='recognized_data', required=False, help="")
@@ -181,12 +181,20 @@ def reduce(main_link:str,
                 break  # If successful, break out of the retry loop
 
             except Exception as e:
-                logging.error(f"Unexpected error processing link {page_link}: {e}")
-                if not ignore_error:
-                    logging.error("Stopping due to error and ignore_error=False")
-                    return result
-                logging.warning("Ignoring error and moving to next link")
-                break  # Move to next link if ignore_error is True
+                if "quota" in str(e).lower() or "resource exhausted" in str(e).lower():
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                    time.sleep(delay)
+                else:
+                    logging.error(f"Unexpected error processing link {page_link}: {e}")
+                    if not ignore_error:
+                        logging.error("Stopping due to error and ignore_error=False")
+                        return result
+                    logging.warning("Ignoring error and moving to next link")
+                    break  # Move to next link if ignore_error is True
+
+        else:  # This else clause is executed if the for loop completes without breaking
+            logging.error(f"Max retries reached for link {page_link}. Moving to next link.")
 
     return result
 
@@ -195,7 +203,7 @@ if __name__ == "__main__":
     model_name, gemini_api, addictional_data = parse_args() 
 
     # Initalize models
-    assert model_name in ['gemini'], "There no available model you lookin for"
+    assert model_name in ['gemini'], "There no available model you're looking for"
 
     if model_name == 'gemini': 
         model = GeminiInference(api_key =gemini_api, model_name =addictional_data['gemini_model'], prompt=addictional_data['prompt'])

@@ -174,6 +174,8 @@ def reduce(main_link:str,
     
     max_retries = 20
     base_delay = 5  # Initial delay in seconds
+    current_delay = base_delay  # Track the current delay
+    consecutive_successes = 0  # Track consecutive successful requests
     
     for i, page_link in enumerate(all_links):     
         for attempt in range(max_retries):
@@ -190,11 +192,18 @@ def reduce(main_link:str,
                     save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
                 
                 logging.info("Processing successful")
+                consecutive_successes += 1
+                if consecutive_successes >= 2:  # Reset delay after 5 consecutive successes
+                    current_delay = base_delay
+                    consecutive_successes = 0
+                    logging.info("Reset delay to base delay due to consecutive successes")
                 break  # If successful, break out of the retry loop
 
             except Exception as e:
+                consecutive_successes = 0  # Reset consecutive successes counter
                 if "quota" in str(e).lower() or "resource exhausted" in str(e).lower():
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    current_delay = min(current_delay * 2, 300)  # Cap the delay at 5 minutes
+                    delay = current_delay + random.uniform(0, 1)
                     logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                     time.sleep(delay)
                 else:
@@ -207,6 +216,7 @@ def reduce(main_link:str,
 
         else:  # This else clause is executed if the for loop completes without breaking
             logging.error(f"Max retries reached for link {page_link}. Moving to next link.")
+            current_delay = base_delay  # Reset delay after moving to next link
 
     return result
 

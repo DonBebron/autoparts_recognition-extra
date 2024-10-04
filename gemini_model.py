@@ -4,6 +4,7 @@ import google.generativeai as genai
 from pathlib import Path
 from time import sleep
 import random
+from collections import Counter
 
 from PIL import Image
 import requests
@@ -88,7 +89,9 @@ class GeminiInference():
                                   safety_settings=safety_settings)
 
     self.validator_model = self.create_validator_model(model_name)
-    self.incorrect_predictions = []
+    self.incorrect_predictions = Counter()
+    self.max_attempts_per_number = 3
+    self.max_total_attempts = 5
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -179,7 +182,7 @@ class GeminiInference():
     6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
 
-    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
+    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions.keys())}
 
     If the number follows these rules, respond with:
     <VALID>
@@ -220,7 +223,7 @@ class GeminiInference():
     return response.text
 
   def reset_incorrect_predictions(self):
-    self.incorrect_predictions = []
+    self.incorrect_predictions.clear()
 
   def __call__(self, image_path):
     # Validate that an image is present
@@ -234,12 +237,21 @@ class GeminiInference():
     if not (img := Path(image_path)).exists():
       raise FileNotFoundError(f"Could not find image: {img}")
 
-    prompt_with_incorrect = f"{self.prompt}\n\nPreviously incorrect predictions: {', '.join(self.incorrect_predictions)}"
+    total_attempts = 0
+    while total_attempts < self.max_total_attempts:
+        prompt_with_incorrect = f"{self.prompt}\n\nPreviously incorrect predictions: {', '.join(self.incorrect_predictions.keys())}"
 
-    answer = self.get_response(img, prompt_with_incorrect)
-    extracted_number = self.extract_number(answer)
+        answer = self.get_response(img, prompt_with_incorrect)
+        extracted_number = self.extract_number(answer)
 
-    if extracted_number.upper() != "NONE":
+        if extracted_number.upper() == "NONE":
+            break
+
+        if self.incorrect_predictions[extracted_number] >= self.max_attempts_per_number:
+            print(f"Skipping previously incorrect prediction: {extracted_number}")
+            total_attempts += 1
+            continue
+
         validation_result = self.validate_number(extracted_number)
         if "<VALID>" in validation_result:
             double_check_result = self.double_check_confused_digits(extracted_number)
@@ -253,8 +265,8 @@ class GeminiInference():
                 return extracted_number
         else:
             print(f"Validation failed: {validation_result}")
-            self.incorrect_predictions.append(extracted_number)
-            return self.__call__(image_path)  # Retry with updated incorrect_predictions
+            self.incorrect_predictions[extracted_number] += 1
+            total_attempts += 1
 
     self.reset_incorrect_predictions()  # Reset for the next image
     return "NONE"

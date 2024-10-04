@@ -31,7 +31,7 @@ def parse_args():
     
     parser.add_argument('--model', type=str, required=True, help="The name of the model to use, e.g., 'gemini'")
     parser.add_argument('--gemini-api', type=str, required=True, help="API key for the Gemini model")
-    parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-flash', required=False, help="Gemini model u going to use")
+    parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-pro', required=False, help="Gemini model u going to use")
     parser.add_argument('--prompt', type=str, default=None, required=False, help="source to txt file write prompt written inside")
     parser.add_argument('--first-page-link', type=str, default='https://injapan.ru/category/2084017018/currency-USD/mode-1/condition-used/page-1/sort-enddate/order-ascending.html', required=False, help="")
     parser.add_argument('--save-file-name', type=str, default='recognized_data', required=False, help="")
@@ -71,9 +71,6 @@ def encode(link:str,
            picker:TargetModel, 
            model:GeminiInference) -> dict:
     logging.info(f"Processing link: {link}")
-    max_retries = 20
-    base_delay = 5  # Initial delay in seconds
-
     try:
         page_img_links = picker.processor.parse_images_from_page(link)
         page_img_links = list(set(page_img_links))
@@ -103,24 +100,15 @@ def encode(link:str,
         target_image_link = None
         
         for target_image_link, score in [(i['image_link'], i['score']) for i in images_probs]:
-            for attempt in range(max_retries):
-                try:
-                    logging.info(f'Predicting on image {target_image_link} with score {score}')
-                    detail_number = str(model(target_image_link))
-                    
-                    if detail_number.lower().strip() != 'none':
-                        break
-                except Exception as e:
-                    if "quota" in str(e).lower() or "resource exhausted" in str(e).lower():
-                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                        logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
-                        time.sleep(delay)
-                    else:
-                        logging.warning(f"Error processing image {target_image_link}: {e}")
-                        break  # Break the retry loop for non-quota errors
-            
-            if detail_number.lower().strip() != 'none':
-                break  # Break the outer loop if we found a valid detail number
+            try:
+                logging.info(f'Predicting on image {target_image_link} with score {score}')
+                detail_number = str(model(target_image_link))
+                
+                if detail_number.lower().strip() != 'none':
+                    break
+            except Exception as e:
+                logging.warning(f"Error processing image {target_image_link}: {e}")
+                continue
         
         if detail_number.lower().strip() == 'none':
             logging.warning("No detail number found in any image")
@@ -174,8 +162,6 @@ def reduce(main_link:str,
     
     max_retries = 20
     base_delay = 5  # Initial delay in seconds
-    current_delay = base_delay  # Track the current delay
-    max_delay = 60  # Maximum delay of 1 minute
     
     for i, page_link in enumerate(all_links):     
         for attempt in range(max_retries):
@@ -192,27 +178,15 @@ def reduce(main_link:str,
                     save_intermediate_results(result, f"{savename}_part_{i // 10 + 1}")
                 
                 logging.info("Processing successful")
-                current_delay = base_delay  # Reset delay after successful attempt
-                logging.info("Reset delay to base delay due to successful attempt")
                 break  # If successful, break out of the retry loop
 
             except Exception as e:
-                if "quota" in str(e).lower() or "resource exhausted" in str(e).lower():
-                    current_delay = min(current_delay * 2, max_delay)  # Cap the delay at 1 minute
-                    delay = current_delay + random.uniform(0, 1)
-                    logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
-                    time.sleep(delay)
-                else:
-                    logging.error(f"Unexpected error processing link {page_link}: {e}")
-                    if not ignore_error:
-                        logging.error("Stopping due to error and ignore_error=False")
-                        return result
-                    logging.warning("Ignoring error and moving to next link")
-                    break  # Move to next link if ignore_error is True
-
-        else:  # This else clause is executed if the for loop completes without breaking
-            logging.error(f"Max retries reached for link {page_link}. Moving to next link.")
-            current_delay = base_delay  # Reset delay after moving to next link
+                logging.error(f"Unexpected error processing link {page_link}: {e}")
+                if not ignore_error:
+                    logging.error("Stopping due to error and ignore_error=False")
+                    return result
+                logging.warning("Ignoring error and moving to next link")
+                break  # Move to next link if ignore_error is True
 
     return result
 
@@ -221,7 +195,7 @@ if __name__ == "__main__":
     model_name, gemini_api, addictional_data = parse_args() 
 
     # Initalize models
-    assert model_name in ['gemini'], "There no available model you're looking for"
+    assert model_name in ['gemini'], "There no available model you lookin for"
 
     if model_name == 'gemini': 
         model = GeminiInference(api_key =gemini_api, model_name =addictional_data['gemini_model'], prompt=addictional_data['prompt'])

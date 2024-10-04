@@ -164,7 +164,7 @@ class GeminiInference():
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
     Rules for validation:
-    1. The number should consist of 10-11 characters.
+    1. The number should consist of 9-11 characters.
     2. It may or may not be visibly divided into groups.
     3. The structure should closely follow this pattern:
        - First part: 3 characters (e.g., "5Q0", "8S0")
@@ -177,6 +177,7 @@ class GeminiInference():
        - '1' and 'I' (letter I) should not be confused
     6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+    8. Ensure no extra digits or characters are included that don't belong to the actual part number.
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
@@ -184,6 +185,9 @@ class GeminiInference():
     <VALID>
 
     If the number does not follow these rules or seems incorrect, respond with:
+    <INVALID>
+
+    If the number does not follow these rules at all, respond with (in the explanation ask model to look for the number in another section of the image):
     <INVALID>
 
     Explanation: [Brief explanation of why it's valid or invalid including the number itself]
@@ -222,79 +226,64 @@ class GeminiInference():
     self.incorrect_predictions = []
 
   def __call__(self, image_path):
-
-      # Validate that an image is present
-      if image_path.startswith('http'):
+    # Validate that an image is present
+    if image_path.startswith('http'):
         # read remote img bytes
         img = Image.open(requests.get(image_path, stream=True).raw)
         # save image to local "example_image.jpg"
         img.save("example_image.jpg")
         image_path = "example_image.jpg"
 
-      if not (img := Path(image_path)).exists():
+    if not (img := Path(image_path)).exists():
         raise FileNotFoundError(f"Could not find image: {img}")
 
-      # First attempt
-      answer = self.get_response(img)
-      extracted_number = self.extract_number(answer)
-      
-      if extracted_number.upper() != "NONE":
-        validation_result = self.validate_number(extracted_number)
-        if "<VALID>" in validation_result:
-          # Add an extra check for commonly confused digits
-          double_check_result = self.double_check_confused_digits(extracted_number)
-          if "<CORRECTED>" in double_check_result:
-            corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
-            print(f"Number corrected after double-check: {corrected_number}")
-            self.reset_incorrect_predictions()
-            return corrected_number
-          elif "<UNCHANGED>" in double_check_result:
-            self.reset_incorrect_predictions()
-            return extracted_number
-        else:
-          print(f"First validation failed: {validation_result}")
-          self.incorrect_predictions.append(extracted_number)
-          
-          # Second attempt with a more specific prompt
-          specific_prompt = f"""
-          The previously extracted number "{extracted_number}" was invalid. 
-          {validation_result}
-          Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
-          Please re-examine the image carefully and try to identify a valid VAG part number.
-          Remember, a valid VAG part number typically:
-          - Consists of 9-11 characters
-          - Is divided into three groups separated by spaces
-          - Has a first group of 3 characters (e.g., "1K2", "4H0")
-          - Has a second group of 3 digits (e.g., "820", "907")
-          - Has a third group of 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E")
-          
-          If you find a number matching this format, please provide it.
-          If you still can't find a valid number, respond with NONE.
-
-          Response Format:
-          - If a valid part number is identified: <START> [VAG Part Number] <END>
-          - If no valid number is identified: <START> NONE <END>
-          """
-          
-          image_parts = [
-              {
-                  "mime_type": "image/jpeg",
-                  "data": img.read_bytes()
-              },
-          ]
-          prompt_parts = [image_parts[0], specific_prompt]
-          
-          second_answer = self.get_response(img)  # This already returns the text
-          second_extracted_number = self.extract_number(second_answer)  # Remove .text here
-          
-          if second_extracted_number.upper() != "NONE":
-            second_validation_result = self.validate_number(second_extracted_number)
-            if "<VALID>" in second_validation_result:
-              self.reset_incorrect_predictions()  # Reset for the next page
-              return second_extracted_number
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        # Generate response and extract number
+        answer = self.get_response(img)
+        extracted_number = self.extract_number(answer)
+        
+        if extracted_number.upper() != "NONE":
+            validation_result = self.validate_number(extracted_number)
+            if "<VALID>" in validation_result:
+                # Add an extra check for commonly confused digits
+                double_check_result = self.double_check_confused_digits(extracted_number)
+                if "<CORRECTED>" in double_check_result:
+                    corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
+                    print(f"Number corrected after double-check: {corrected_number}")
+                    self.reset_incorrect_predictions()
+                    return corrected_number
+                elif "<UNCHANGED>" in double_check_result:
+                    self.reset_incorrect_predictions()
+                    return extracted_number
             else:
-              print(f"Second validation failed: {second_validation_result}")
-              self.incorrect_predictions.append(second_extracted_number)
-      
-      self.reset_incorrect_predictions()  # Reset for the next page
-      return "NONE"
+                print(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
+                self.incorrect_predictions.append(extracted_number)
+        else:
+            print(f"No number found (Attempt {attempt + 1})")
+
+        # If this is not the last attempt, create a more specific prompt for the next try
+        if attempt < max_attempts - 1:
+            specific_prompt = f"""
+            {f'The previously extracted number "{extracted_number}" was invalid.' if extracted_number.upper() != "NONE" else "No valid number was found."}
+            Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
+            Please re-examine the image carefully and try to identify a valid VAG part number.
+            Remember, a valid VAG part number typically:
+            - Consists of 9-11 characters
+            - Is divided into three groups separated by spaces
+            - Has a first group of 3 characters (e.g., "1K2", "4H0")
+            - Has a second group of 3 digits (e.g., "820", "907")
+            - Has a third group of 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E")
+            
+            If you find a number matching this format, please provide it.
+            If you still can't find a valid number, respond with NONE.
+
+            Response Format:
+            - If a valid part number is identified: <START> [VAG Part Number] <END>
+            - If no valid number is identified: <START> NONE <END>
+            """
+            
+            self.prompt = specific_prompt
+
+    self.reset_incorrect_predictions()  # Reset for the next page
+    return "NONE"

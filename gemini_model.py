@@ -179,19 +179,22 @@ class GeminiInference():
     6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
     8. Ensure no extra digits or characters are included that don't belong to the actual part number.
+    9. Check if the number could be an upside-down non-VAG number:
+       - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
+       - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
-    If the number follows these rules, respond with:
+    If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
     <VALID>
 
-    If the number does not follow these rules or seems incorrect, respond with:
+    If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
     <INVALID>
 
-    If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line that might contain the part number (which is usually bigger)):
+ If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line that might contain the part number (which is usually bigger)):
     <INVALID>
-
-    Explanation: [Brief explanation of why it's valid or invalid including the number itself]
+    
+    Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
     """
 
     response = self.validator_model.generate_content(prompt)
@@ -285,9 +288,12 @@ class GeminiInference():
             Please re-examine the image carefully and try to identify a valid VAG part number.
             Focus on the following:
             1. Look for numbers that are larger or more prominent in the image.
-            2. Try to look on the uppper part of the label.
+            2. Try to look on the upper part of the label.
             3. Examine any barcodes in the image, as the part number might be printed above them.
             4. If there are multiple numbers, prioritize those that match the VAG part number format.
+            5. Be cautious of upside-down numbers that might look like VAG numbers when flipped:
+               - Check if any identified numbers make more sense when read upside-down
+               - Ensure the number you're reading is oriented correctly on the label
 
             Remember, a valid VAG part number typically:
             - Consists of 9-11 characters

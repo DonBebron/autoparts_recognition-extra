@@ -14,16 +14,16 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 **Note:** This algorithm is designed to identify and verify VAG part numbers. Assume all part numbers belong to VAG by default.
 
 1. **Identify Potential Numbers on the Photo:**
-   - Examine all numbers and markings in the image.
+   - Examine all numbers and markings in the image carefully.
    - Look for numbers that resemble catalog numbers, which typically include combinations of digits and letters.
 
 2. **Analyze the Structure of the Numbers:**
    - VAG Catalog Numbers (Part Numbers) typically consist of 10-11 characters.
    - They are often, but not always, divided into visible groups.
    - The structure usually follows this pattern:
-     - First part: 3 characters (e.g., "5Q0", "8S0")
+     - First part: 3 characters (e.g., "5Q0", "8S0", "4H0")
      - Middle part: 3 digits (e.g., "937", "907")
-     - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+     - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D", "064 BP")
 
 3. **Determine the Brand by the Numbers:**
    - VAG Numbers: Numbers that closely follow the structure described above are likely VAG numbers.
@@ -32,9 +32,12 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
 4. **Verify the Accuracy of the Number:**
    - Match with Known Formats: Compare the identified number with the VAG format described above.
    - Check for Consistency: Ensure the number maintains a consistent structure throughout.
-   - Pay special attention to the last part of the number:
-     - It should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
-     - If it ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+   - Pay special attention to the first and last parts of the number:
+     - The first part should always be 3 characters long and typically starts with a digit followed by two characters (e.g., "4H0", "1K0")
+     - The last part should be 3-4 characters long, and may include a space before the last letter(s) (e.g., "064 BP", "085B")
+   - Be cautious of common misreadings:
+     - Avoid confusing "1" with "I" or "0" with "O"
+     - Double-check the difference between similar-looking digits like "0" and "8", or "1" and "7"
 
 5. **Final Check and Marking:**
    - Ensure the number is not accompanied by a third-party manufacturer's logo (for VAG numbers).

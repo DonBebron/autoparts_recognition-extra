@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 import re
+from requests.exceptions import RequestException, ProxyError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -102,39 +103,41 @@ class Processor(metaclass=RuntimeMeta):
         self.session = requests.Session()
         self.user_agents = self.generate_similar_user_agents()
         self.headers_list = self.generate_headers_list()
-
-    def generate_similar_user_agents(self, num_agents=10):
-        """Generate user agents similar to the successful ones."""
-        base_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{firefox_version}) Gecko/20100101 Firefox/{firefox_version}',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{mac_version}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{safari_version} Safari/605.1.15',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36 Edg/{edge_version}',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36'
+        self.proxies = [
+            # Add your list of proxy servers here, for example:
+            # {'http': 'http://10.10.1.10:3128', 'https': 'http://10.10.1.10:1080'},
+            # {'http': 'http://10.10.1.11:3128', 'https': 'http://10.10.1.11:1080'},
         ]
+
+    def generate_similar_user_agents(self, num_agents=20):
+        """Generate a diverse set of realistic PC user agents."""
+        os_list = ['Windows NT 10.0', 'Windows NT 11.0', 'Macintosh; Intel Mac OS X 10_15', 'X11; Linux x86_64']
+        browser_list = ['Chrome', 'Firefox', 'Safari', 'Edge']
         
         user_agents = []
         for _ in range(num_agents):
-            template = random.choice(base_agents)
-            chrome_version = f"{random.randint(90, 100)}.0.{random.randint(4000, 5000)}.{random.randint(100, 200)}"
-            firefox_version = f"{random.randint(85, 95)}.0"
-            mac_version = f"{random.randint(14, 15)}_{random.randint(0, 7)}"
-            safari_version = f"{random.randint(14, 15)}.{random.randint(0, 3)}"
-            edge_version = f"{random.randint(90, 100)}.0.{random.randint(800, 1000)}.{random.randint(50, 100)}"
+            os = random.choice(os_list)
+            browser = random.choice(browser_list)
             
-            user_agent = template.format(
-                chrome_version=chrome_version,
-                firefox_version=firefox_version,
-                mac_version=mac_version,
-                safari_version=safari_version,
-                edge_version=edge_version
-            )
+            if browser == 'Chrome':
+                chrome_version = f"{random.randint(90, 110)}.0.{random.randint(4000, 5000)}.{random.randint(100, 200)}"
+                user_agent = f"Mozilla/5.0 ({os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_version} Safari/537.36"
+            elif browser == 'Firefox':
+                firefox_version = f"{random.randint(85, 105)}.0"
+                user_agent = f"Mozilla/5.0 ({os}; rv:{firefox_version}) Gecko/20100101 Firefox/{firefox_version}"
+            elif browser == 'Safari':
+                safari_version = f"{random.randint(605, 615)}.{random.randint(1, 3)}.{random.randint(1, 15)}"
+                user_agent = f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_{random.randint(1, 7)}) AppleWebKit/{safari_version} (KHTML, like Gecko) Version/{random.randint(14, 16)}.{random.randint(0, 3)} Safari/{safari_version}"
+            elif browser == 'Edge':
+                edge_version = f"{random.randint(90, 110)}.0.{random.randint(800, 1000)}.{random.randint(50, 100)}"
+                user_agent = f"Mozilla/5.0 ({os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{edge_version} Safari/537.36 Edg/{edge_version}"
+            
             user_agents.append(user_agent)
         
         return user_agents
 
     def generate_headers_list(self):
-        """Generate a list of headers with different user agents."""
+        """Generate a list of headers with different user agents and additional variations."""
         base_headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -153,6 +156,17 @@ class Processor(metaclass=RuntimeMeta):
         for user_agent in self.user_agents:
             headers = base_headers.copy()
             headers['User-Agent'] = user_agent
+            
+            # Add some randomness to the headers
+            if random.random() < 0.5:
+                headers['Accept-Language'] = random.choice(['en-US,en;q=0.9', 'en-GB,en;q=0.8,en-US;q=0.6', 'en-CA,en-US;q=0.9,en;q=0.8'])
+            if random.random() < 0.3:
+                headers['Sec-Ch-Ua'] = '"Chromium";v="110", "Not A(Brand";v="24", "Google Chrome";v="110"'
+            if random.random() < 0.3:
+                headers['Sec-Ch-Ua-Mobile'] = '?0'
+            if random.random() < 0.3:
+                headers['Sec-Ch-Ua-Platform'] = '"Windows"'
+            
             headers_list.append(headers)
         return headers_list
 
@@ -172,12 +186,13 @@ class Processor(metaclass=RuntimeMeta):
 
         for attempt in range(max_retries):
             headers = random.choice(self.headers_list)
+            proxy = random.choice(self.proxies) if self.proxies else None
             
             try:
                 delay = (2 ** attempt) + random.random()
                 time.sleep(delay)
                 
-                response = self.session.get(url, headers=headers, timeout=15)
+                response = self.session.get(url, headers=headers, proxies=proxy, timeout=5)
                 response.raise_for_status()
                 
                 soup = BeautifulSoup(response.content, 'html.parser')
@@ -203,9 +218,10 @@ class Processor(metaclass=RuntimeMeta):
                 # If we've successfully processed the page, break the retry loop
                 break
             
-            except requests.RequestException as e:
+            except (RequestException, ProxyError) as e:
                 logging.error(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
                 logging.error(f"Headers used: {headers}")
+                logging.error(f"Proxy used: {proxy}")
                 if attempt == max_retries - 1:
                     logging.error(f"Failed to retrieve the webpage after {max_retries} attempts: {e}")
                     return

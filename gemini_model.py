@@ -4,7 +4,6 @@ import google.generativeai as genai
 from pathlib import Path
 from time import sleep
 import random
-from collections import Counter
 
 from PIL import Image
 import requests
@@ -42,15 +41,11 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
    - The catalog number is usually placed in a prominent location on the label.
    - Double-check that you haven't included any extra digits or characters that don't belong to the actual part number.
 
-6. **Avoid Previously Incorrect Predictions:**
-   - Do not return any numbers that have been previously identified as incorrect.
-   - If you find a number that matches the structure but has been marked as incorrect before, look for alternative numbers in the image.
-
 Please follow the above steps to recognize the correct detail number and format the response as follows:
 
 **Response Format:**
-- If a valid part number is identified: `<START> [VAG Part Number] <END>`
-- If no valid number is identified or all potential numbers have been previously marked as incorrect: `<START> NONE <END>`
+- If a part number is identified: `<START> [VAG Part Number] <END>`
+- If no valid number is identified: `<START> NONE <END>`
 """
 
 class GeminiInference():
@@ -89,9 +84,7 @@ class GeminiInference():
                                   safety_settings=safety_settings)
 
     self.validator_model = self.create_validator_model(model_name)
-    self.incorrect_predictions = Counter()
-    self.max_attempts_per_number = 3
-    self.max_total_attempts = 5
+    self.incorrect_predictions = []
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -108,7 +101,7 @@ class GeminiInference():
                                  generation_config=generation_config,
                                  safety_settings=safety_settings)
 
-  def get_response(self, img, prompt):
+  def get_response(self, img):
     image_parts = [
         {
             "mime_type": "image/jpeg",
@@ -117,7 +110,7 @@ class GeminiInference():
     ]
     prompt_parts = [
         image_parts[0],
-        prompt,
+        (self.prompt if self.prompt is not None else "..."),  # Existing prompt
     ]
     
     max_retries = 20
@@ -182,7 +175,7 @@ class GeminiInference():
     6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
 
-    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions.keys())}
+    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
     If the number follows these rules, respond with:
     <VALID>
@@ -223,60 +216,82 @@ class GeminiInference():
     return response.text
 
   def reset_incorrect_predictions(self):
-    self.incorrect_predictions.clear()
+    self.incorrect_predictions = []
 
   def __call__(self, image_path):
-    # Validate that an image is present
-    if image_path.startswith('http'):
-      # read remote img bytes
-      img = Image.open(requests.get(image_path, stream=True).raw)
-      # save image to local "example_image.jpg"
-      img.save("example_image.jpg")
-      image_path = "example_image.jpg"
 
-    if not (img := Path(image_path)).exists():
-      raise FileNotFoundError(f"Could not find image: {img}")
+      # Validate that an image is present
+      if image_path.startswith('http'):
+        # read remote img bytes
+        img = Image.open(requests.get(image_path, stream=True).raw)
+        # save image to local "example_image.jpg"
+        img.save("example_image.jpg")
+        image_path = "example_image.jpg"
 
-    total_attempts = 0
-    none_count = 0
-    max_none_attempts = 3  # Maximum number of consecutive "NONE" responses before giving up
+      if not (img := Path(image_path)).exists():
+        raise FileNotFoundError(f"Could not find image: {img}")
 
-    while total_attempts < self.max_total_attempts:
-        prompt_with_incorrect = f"{self.prompt}\n\nPreviously incorrect predictions: {', '.join(self.incorrect_predictions.keys())}"
-
-        answer = self.get_response(img, prompt_with_incorrect)
-        extracted_number = self.extract_number(answer)
-
-        if extracted_number.upper() == "NONE":
-            none_count += 1
-            if none_count >= max_none_attempts:
-                print(f"No valid numbers found after {none_count} consecutive attempts. Stopping.")
-                break
-            total_attempts += 1
-            continue
-
-        none_count = 0  # Reset the none_count if we get a non-NONE response
-
-        if self.incorrect_predictions[extracted_number] >= self.max_attempts_per_number:
-            print(f"Skipping previously incorrect prediction: {extracted_number}")
-            total_attempts += 1
-            continue
-
+      # First attempt
+      answer = self.get_response(img)
+      extracted_number = self.extract_number(answer)
+      
+      if extracted_number.upper() != "NONE":
         validation_result = self.validate_number(extracted_number)
         if "<VALID>" in validation_result:
-            double_check_result = self.double_check_confused_digits(extracted_number)
-            if "<CORRECTED>" in double_check_result:
-                corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
-                print(f"Number corrected after double-check: {corrected_number}")
-                self.reset_incorrect_predictions()
-                return corrected_number
-            elif "<UNCHANGED>" in double_check_result:
-                self.reset_incorrect_predictions()
-                return extracted_number
+          # Add an extra check for commonly confused digits
+          double_check_result = self.double_check_confused_digits(extracted_number)
+          if "<CORRECTED>" in double_check_result:
+            corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
+            print(f"Number corrected after double-check: {corrected_number}")
+            self.reset_incorrect_predictions()
+            return corrected_number
+          elif "<UNCHANGED>" in double_check_result:
+            self.reset_incorrect_predictions()
+            return extracted_number
         else:
-            print(f"Validation failed: {validation_result}")
-            self.incorrect_predictions[extracted_number] += 1
-            total_attempts += 1
+          print(f"First validation failed: {validation_result}")
+          self.incorrect_predictions.append(extracted_number)
+          
+          # Second attempt with a more specific prompt
+          specific_prompt = f"""
+          The previously extracted number "{extracted_number}" was invalid. 
+          {validation_result}
+          Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
+          Please re-examine the image carefully and try to identify a valid VAG part number.
+          Remember, a valid VAG part number typically:
+          - Consists of 9-11 characters
+          - Is divided into three groups separated by spaces
+          - Has a first group of 3 characters (e.g., "1K2", "4H0")
+          - Has a second group of 3 digits (e.g., "820", "907")
+          - Has a third group of 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E")
+          
+          If you find a number matching this format, please provide it.
+          If you still can't find a valid number, respond with NONE.
 
-    self.reset_incorrect_predictions()  # Reset for the next image
-    return "NONE"
+          Response Format:
+          - If a valid part number is identified: <START> [VAG Part Number] <END>
+          - If no valid number is identified: <START> NONE <END>
+          """
+          
+          image_parts = [
+              {
+                  "mime_type": "image/jpeg",
+                  "data": img.read_bytes()
+              },
+          ]
+          prompt_parts = [image_parts[0], specific_prompt]
+          
+          second_answer = self.get_response(img)  # This already returns the text
+          second_extracted_number = self.extract_number(second_answer)  # Remove .text here
+          
+          if second_extracted_number.upper() != "NONE":
+            second_validation_result = self.validate_number(second_extracted_number)
+            if "<VALID>" in second_validation_result:
+              self.reset_incorrect_predictions()  # Reset for the next page
+              return second_extracted_number
+            else:
+              print(f"Second validation failed: {second_validation_result}")
+              self.incorrect_predictions.append(second_extracted_number)
+      
+      self.reset_incorrect_predictions()  # Reset for the next page
+      return "NONE"

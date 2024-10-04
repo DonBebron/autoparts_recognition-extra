@@ -239,6 +239,8 @@ class GeminiInference():
         raise FileNotFoundError(f"Could not find image: {img}")
 
     max_attempts = 3
+    original_prompt = self.prompt
+
     for attempt in range(max_attempts):
         # Generate response and extract number
         answer = self.get_response(img)
@@ -253,9 +255,11 @@ class GeminiInference():
                     corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
                     print(f"Number corrected after double-check: {corrected_number}")
                     self.reset_incorrect_predictions()
+                    self.prompt = original_prompt  # Reset prompt to original
                     return corrected_number
                 elif "<UNCHANGED>" in double_check_result:
                     self.reset_incorrect_predictions()
+                    self.prompt = original_prompt  # Reset prompt to original
                     return extracted_number
             else:
                 print(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
@@ -266,16 +270,26 @@ class GeminiInference():
         # If this is not the last attempt, create a more specific prompt for the next try
         if attempt < max_attempts - 1:
             specific_prompt = f"""
-            {f'The previously extracted number "{extracted_number}" was invalid.' if extracted_number.upper() != "NONE" else "No valid number was found."}
+            {original_prompt}
+
+            Additional instructions for attempt {attempt + 2}:
+            {f'The previously extracted number "{extracted_number}" was invalid.' if extracted_number.upper() != "NONE" else "No valid number was found in the previous attempt(s)."}
             Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
+
             Please re-examine the image carefully and try to identify a valid VAG part number.
+            Focus on the following:
+            1. Look for numbers that are larger or more prominent in the image.
+            2. Check for numbers near labels like "Part No.", "P/N", or similar identifiers.
+            3. Examine any barcodes or QR codes in the image, as the part number might be printed near them.
+            4. If there are multiple numbers, prioritize those that match the VAG part number format.
+
             Remember, a valid VAG part number typically:
             - Consists of 9-11 characters
-            - Is divided into three groups separated by spaces
+            - Is often divided into three groups (e.g., "1K2 820 015 C")
             - Has a first group of 3 characters (e.g., "1K2", "4H0")
             - Has a second group of 3 digits (e.g., "820", "907")
-            - Has a third group of 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E")
-            
+            - Has a third group of 3-4 characters, sometimes ending with a letter (e.g., "015 C", "801 E")
+
             If you find a number matching this format, please provide it.
             If you still can't find a valid number, respond with NONE.
 
@@ -287,4 +301,5 @@ class GeminiInference():
             self.prompt = specific_prompt
 
     self.reset_incorrect_predictions()  # Reset for the next page
+    self.prompt = original_prompt  # Reset prompt to original
     return "NONE"

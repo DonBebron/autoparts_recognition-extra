@@ -41,11 +41,15 @@ DEFAULT_PROMPT = """identify Main Catalog Number from photo by this Algorithm
    - The catalog number is usually placed in a prominent location on the label.
    - Double-check that you haven't included any extra digits or characters that don't belong to the actual part number.
 
+6. **Avoid Previously Incorrect Predictions:**
+   - Do not return any numbers that have been previously identified as incorrect.
+   - If you find a number that matches the structure but has been marked as incorrect before, look for alternative numbers in the image.
+
 Please follow the above steps to recognize the correct detail number and format the response as follows:
 
 **Response Format:**
-- If a part number is identified: `<START> [VAG Part Number] <END>`
-- If no valid number is identified: `<START> NONE <END>`
+- If a valid part number is identified: `<START> [VAG Part Number] <END>`
+- If no valid number is identified or all potential numbers have been previously marked as incorrect: `<START> NONE <END>`
 """
 
 class GeminiInference():
@@ -101,7 +105,7 @@ class GeminiInference():
                                  generation_config=generation_config,
                                  safety_settings=safety_settings)
 
-  def get_response(self, img):
+  def get_response(self, img, prompt):
     image_parts = [
         {
             "mime_type": "image/jpeg",
@@ -110,7 +114,7 @@ class GeminiInference():
     ]
     prompt_parts = [
         image_parts[0],
-        (self.prompt if self.prompt is not None else "..."),  # Existing prompt
+        prompt,
     ]
     
     max_retries = 20
@@ -219,79 +223,38 @@ class GeminiInference():
     self.incorrect_predictions = []
 
   def __call__(self, image_path):
+    # Validate that an image is present
+    if image_path.startswith('http'):
+      # read remote img bytes
+      img = Image.open(requests.get(image_path, stream=True).raw)
+      # save image to local "example_image.jpg"
+      img.save("example_image.jpg")
+      image_path = "example_image.jpg"
 
-      # Validate that an image is present
-      if image_path.startswith('http'):
-        # read remote img bytes
-        img = Image.open(requests.get(image_path, stream=True).raw)
-        # save image to local "example_image.jpg"
-        img.save("example_image.jpg")
-        image_path = "example_image.jpg"
+    if not (img := Path(image_path)).exists():
+      raise FileNotFoundError(f"Could not find image: {img}")
 
-      if not (img := Path(image_path)).exists():
-        raise FileNotFoundError(f"Could not find image: {img}")
+    prompt_with_incorrect = f"{self.prompt}\n\nPreviously incorrect predictions: {', '.join(self.incorrect_predictions)}"
 
-      # First attempt
-      answer = self.get_response(img)
-      extracted_number = self.extract_number(answer)
-      
-      if extracted_number.upper() != "NONE":
+    answer = self.get_response(img, prompt_with_incorrect)
+    extracted_number = self.extract_number(answer)
+
+    if extracted_number.upper() != "NONE":
         validation_result = self.validate_number(extracted_number)
         if "<VALID>" in validation_result:
-          # Add an extra check for commonly confused digits
-          double_check_result = self.double_check_confused_digits(extracted_number)
-          if "<CORRECTED>" in double_check_result:
-            corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
-            print(f"Number corrected after double-check: {corrected_number}")
-            self.reset_incorrect_predictions()
-            return corrected_number
-          elif "<UNCHANGED>" in double_check_result:
-            self.reset_incorrect_predictions()
-            return extracted_number
+            double_check_result = self.double_check_confused_digits(extracted_number)
+            if "<CORRECTED>" in double_check_result:
+                corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
+                print(f"Number corrected after double-check: {corrected_number}")
+                self.reset_incorrect_predictions()
+                return corrected_number
+            elif "<UNCHANGED>" in double_check_result:
+                self.reset_incorrect_predictions()
+                return extracted_number
         else:
-          print(f"First validation failed: {validation_result}")
-          self.incorrect_predictions.append(extracted_number)
-          
-          # Second attempt with a more specific prompt
-          specific_prompt = f"""
-          The previously extracted number "{extracted_number}" was invalid. 
-          {validation_result}
-          Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
-          Please re-examine the image carefully and try to identify a valid VAG part number.
-          Remember, a valid VAG part number typically:
-          - Consists of 9-11 characters
-          - Is divided into three groups separated by spaces
-          - Has a first group of 3 characters (e.g., "1K2", "4H0")
-          - Has a second group of 3 digits (e.g., "820", "907")
-          - Has a third group of 3-4 digits, sometimes followed by a letter (e.g., "015 C", "801 E")
-          
-          If you find a number matching this format, please provide it.
-          If you still can't find a valid number, respond with NONE.
+            print(f"Validation failed: {validation_result}")
+            self.incorrect_predictions.append(extracted_number)
+            return self.__call__(image_path)  # Retry with updated incorrect_predictions
 
-          Response Format:
-          - If a valid part number is identified: <START> [VAG Part Number] <END>
-          - If no valid number is identified: <START> NONE <END>
-          """
-          
-          image_parts = [
-              {
-                  "mime_type": "image/jpeg",
-                  "data": img.read_bytes()
-              },
-          ]
-          prompt_parts = [image_parts[0], specific_prompt]
-          
-          second_answer = self.get_response(img)  # This already returns the text
-          second_extracted_number = self.extract_number(second_answer)  # Remove .text here
-          
-          if second_extracted_number.upper() != "NONE":
-            second_validation_result = self.validate_number(second_extracted_number)
-            if "<VALID>" in second_validation_result:
-              self.reset_incorrect_predictions()  # Reset for the next page
-              return second_extracted_number
-            else:
-              print(f"Second validation failed: {second_validation_result}")
-              self.incorrect_predictions.append(second_extracted_number)
-      
-      self.reset_incorrect_predictions()  # Reset for the next page
-      return "NONE"
+    self.reset_incorrect_predictions()  # Reset for the next image
+    return "NONE"

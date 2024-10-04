@@ -191,9 +191,9 @@ class GeminiInference():
     If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
     <INVALID>
 
- If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line that might contain the part number (which is usually bigger)):
+ If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line in the upper right corner of the label that might contain the part number (which is usually bigger)):
     <INVALID>
-    
+
     Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
     """
 

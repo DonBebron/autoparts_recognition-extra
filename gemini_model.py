@@ -268,6 +268,14 @@ class GeminiInference():
     # Reset chat history for new image
     self.chat_history = []
     
+    # Validate that an image is present
+    if image_path.startswith('http'):
+        # read remote img bytes
+        img = Image.open(requests.get(image_path, stream=True).raw)
+        # save image to local "example_image.jpg"
+        img.save("example_image.jpg")
+        image_path = "example_image.jpg"
+
     if not Path(image_path).exists():
         raise FileNotFoundError(f"Could not find image: {image_path}")
 

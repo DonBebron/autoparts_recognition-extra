@@ -230,7 +230,8 @@ class GeminiInference():
     9. Check if the number could be an upside-down non-VAG number:
        - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
        - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
-
+    MAKE SURE THAT STEP 6 IS FOLLOWED.
+       
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
     Based on your examination of the image and the validation rules, respond with one of the following:

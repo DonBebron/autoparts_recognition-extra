@@ -269,6 +269,14 @@ class GeminiInference():
             raise FileNotFoundError(f"Could not find image: {img}")
         img_data = img
 
+    # Create image_parts here
+    image_parts = [
+        {
+            "mime_type": "image/jpeg",
+            "data": img_data.read() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
+        },
+    ]
+
     # Generate response and extract number
     answer = self.get_response(img_data)
     extracted_number = self.extract_number(answer)
@@ -297,7 +305,7 @@ class GeminiInference():
         self.chat_history.append({
             "role": "user", 
             "parts": [
-                {"type": "image", "data": image_parts[0]},
+                {"type": "image", "data": image_parts[0]['data']},
                 "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
             ]
         })

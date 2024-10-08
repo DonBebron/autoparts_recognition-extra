@@ -109,7 +109,6 @@ class GeminiInference():
 
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
-    self.chat_history = []
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -132,27 +131,11 @@ class GeminiInference():
     
     for attempt in range(max_retries):
         try:
-            # Convert image to PNG format
-            if isinstance(img_data, io.BytesIO):
-                img_data.seek(0)  # Reset the file pointer to the beginning
-                img = Image.open(img_data)
-            else:
-                img = Image.open(img_data)
-            
-            # Convert to RGB if the image is in RGBA mode
-            if img.mode == 'RGBA':
-                img = img.convert('RGB')
-            
-            # Save as PNG in memory
-            png_buffer = io.BytesIO()
-            img.save(png_buffer, format='PNG')
-            png_buffer.seek(0)
-            
             image_parts = [
                 {
                     "inline_data": {
-                        "mime_type": "image/png",
-                        "data": png_buffer.getvalue()
+                        "mime_type": "image/jpeg",
+                        "data": img_data.getvalue() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
                     }
                 },
             ]
@@ -164,13 +147,8 @@ class GeminiInference():
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
-            chat = self.model.start_chat(history=self.chat_history)
-            response = chat.send_message(prompt_parts)
+            response = self.model.generate_content(prompt_parts)
             logging.info(f"get_response output: {response.text}")
-            
-            # Update chat history with the correct format
-            self.chat_history.append({"role": "user", "parts": prompt_parts})
-            self.chat_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
         except Exception as e:
@@ -178,12 +156,9 @@ class GeminiInference():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                 logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                 sleep(delay)
-            elif "Unable to process input image" in str(e):
-                logging.warning(f"Unable to process image. Attempt {attempt + 1}/{max_retries}. Retrying with different format...")
-                # The retry will happen automatically in the next iteration
             else:
                 logging.error(f"Error in get_response: {str(e)}")
-                raise  # Re-raise the exception if it's not a rate limit error or image processing error
+                raise  # Re-raise the exception if it's not a rate limit error
     
     logging.error("Max retries reached. Unable to get a response.")
     raise Exception("Max retries reached. Unable to get a response.")
@@ -212,26 +187,12 @@ class GeminiInference():
     return number
 
   def validate_number(self, extracted_number, img_data):
-    # Convert image to PNG format
-    if isinstance(img_data, io.BytesIO):
-        img_data.seek(0)  # Reset the file pointer to the beginning
-        img = Image.open(img_data)
-    else:
-        img = Image.open(img_data)
-    
-    # Convert to RGB if the image is in RGBA mode
-    if img.mode == 'RGBA':
-        img = img.convert('RGB')
-    
-    # Save as PNG in memory
-    png_buffer = io.BytesIO()
-    img.save(png_buffer, format='PNG')
-    png_buffer.seek(0)
-    
     image_parts = [
         {
-            "mime_type": "image/png",
-            "data": png_buffer.getvalue()
+            "inline_data": {
+                "mime_type": "image/jpeg",
+                "data": img_data.getvalue() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
+            }
         },
     ]
     
@@ -290,12 +251,8 @@ class GeminiInference():
 
   def reset_incorrect_predictions(self):
     self.incorrect_predictions = []
-    self.chat_history = []  # Reset chat history when resetting predictions
 
   def __call__(self, image_path):
-    # Reset chat history for new image
-    self.chat_history = []
-    
     # Handle remote or local images
     if image_path.startswith('http'):
         # Read remote image into memory
@@ -332,21 +289,9 @@ class GeminiInference():
         # If NONE is returned, try one more time with the same prompt
         logging.info("Attempting one more time with the same image")
         
-        # Add a retry prompt to the chat history, emphasizing it's the same image
-        self.chat_history.append({
-            "role": "user", 
-            "parts": [
-                {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": img_data.getvalue() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
-                    }
-                },
-                "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
-            ]
-        })
+        retry_prompt = self.prompt + "\n\nThis is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
         
-        retry_answer = self.get_response(img_data)  # This will use the updated chat history
+        retry_answer = self.get_response(img_data)  # This will use the retry prompt
         retry_extracted_number = self.extract_number(retry_answer)
         
         logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
@@ -364,6 +309,5 @@ class GeminiInference():
             logging.warning("No number found in retry attempt")
 
     logging.warning("All attempts failed. Returning NONE.")
-    logging.info(f"Final chat history: {self.chat_history}")
     self.reset_incorrect_predictions()  # Reset for the next page
     return "NONE"

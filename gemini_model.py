@@ -290,7 +290,7 @@ class GeminiInference():
        
         # If NONE is returned, try one more time with the same prompt
         logging.info("Attempting one more time with the same prompt")
-        retry_answer = self.get_response(img)
+        retry_answer = self.get_response(img)  # This will use the updated chat history
         retry_extracted_number = self.extract_number(retry_answer)
         
         logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")

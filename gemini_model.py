@@ -143,8 +143,7 @@ class GeminiInference():
             ]
             
             prompt_parts = [] if not retry else [
-                "This is the exact same image as before. Please try again to identify the VAG part number in this image. "
-                "Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
+                "It is not correct. Try again."
             ]
             
             full_prompt = image_parts + prompt_parts

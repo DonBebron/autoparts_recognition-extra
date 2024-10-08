@@ -115,7 +115,7 @@ class GeminiInference():
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
     generation_config = {
-        "temperature": 0.5,
+        "temperature": 1,
         "top_p": 1,
         "top_k": 32,
         "max_output_tokens": 8192,
@@ -143,7 +143,7 @@ class GeminiInference():
             ]
             
             prompt_parts = [] if not retry else [
-                "It is not correct. Try again. The number is highly visible and clear."
+                "It is not correct. Try again. Look for the numbers that are highly VAG number"
             ]
             
             full_prompt = image_parts + prompt_parts

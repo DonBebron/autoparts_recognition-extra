@@ -215,23 +215,42 @@ class GeminiInference():
 
     If you can find the exact number in the image, proceed with the following validation rules:
 
-    1. The number should consist of 9-11 characters.
+    1. The number should consist of 9-13 characters.
     2. It may or may not be visibly divided into groups.
     3. The structure should closely follow this pattern:
-       - First part: 3 characters (e.g., "5Q0", "8S0")
-       - Middle part: 3 digits (e.g., "937", "907")
-       - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+       [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
+       Example: 5K0 937 087 AC Z15
+       
+       a) First Number (3 characters):
+          - First two digits: Vehicle type (e.g., 3D = Phaeton, 1J = Golf IV, 8L = Audi A3)
+          - Third digit: Body shape or variant (0 = general, 1 = left-hand drive, 2 = right-hand drive, etc.)
+       b) Middle Number (3 digits):
+          - First digit: Main group (e.g., 1 = engine, 2 = fuel/exhaust, 3 = transmission, 4 = front axle, 5 = rear axle)
+          - Last two digits: Subgroup within the main group
+       c) Final Number (3 digits):
+          - Identifies specific part within subgroup
+          - Odd numbers often indicate left parts, even numbers right parts
+       d) Index (1-2 LETTERS): Identifies variants, revisions, or colors
+       e) Software Variant (2-3 characters): Often starts with Z (e.g., Z15, Z4)
+
     4. The entire number may be continuous without spaces, but should still follow the above structure.
     5. Pay extra attention to commonly confused digits:
        - '9' and '8' can be easily confused
        - '0' and 'O' (letter O) should not be mixed up
        - '1' and 'I' (letter I) should not be confused
-    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits), for example, number "868 417 0V6 90" is invalid because index part "90" contains digits.
+    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits).
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
     8. Ensure no extra digits or characters are included that don't belong to the actual part number.
     9. Check if the number could be an upside-down non-VAG number:
        - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
-       - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
+    10. Special cases:
+        - Exchange parts or remanufactured parts are marked with an 'X'
+        - Color codes: e.g., GRU for primed parts requiring painting
+        - Standard parts: May start with 9xx.xxx or 052.xxx
+        - Parts starting with G = lubricant, coolant
+        - Parts starting with D = sealant and adhesive material
+        - Parts starting with B = brake fluid and brake paste
+
     MAKE SURE THAT STEP 6 IS FOLLOWED.
        
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}

@@ -145,13 +145,24 @@ class GeminiInference():
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
-            chat = self.model.start_chat(history=self.chat_history)
+            # If it's the first attempt, start a new chat
+            if not self.chat_history:
+                chat = self.model.start_chat()
+                self.chat_history = [
+                    {"role": "user", "parts": prompt_parts}
+                ]
+            else:
+                chat = self.model.start_chat(history=self.chat_history)
+            
             response = chat.send_message(prompt_parts)
             logging.info(f"get_response output: {response.text}")
             
             # Update chat history
-            self.chat_history.append({"role": "user", "parts": prompt_parts})
             self.chat_history.append({"role": "model", "parts": [response.text]})
+            
+            # If this is a retry, add the retry prompt to the history
+            if len(self.chat_history) > 2:
+                self.chat_history.append({"role": "user", "parts": ["Please try again to identify the VAG part number in the image."]})
             
             return response.text
         except Exception as e:
@@ -308,5 +319,6 @@ class GeminiInference():
             logging.warning("No number found in retry attempt")
 
     logging.warning("All attempts failed. Returning NONE.")
+    logging.info(f"Final chat history: {self.chat_history}")
     self.reset_incorrect_predictions()  # Reset for the next page
     return "NONE"

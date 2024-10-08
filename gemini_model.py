@@ -209,7 +209,7 @@ class GeminiInference():
     prompt = f"""
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
-    Carefully examine the provided image and confirm that the extracted number {extracted_number} is actually visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
+    Examine the provided image and confirm that the extracted number {extracted_number} is actually highly visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
 
     If you can find the exact number in the image, proceed with the following validation rules:
 
@@ -224,7 +224,7 @@ class GeminiInference():
        - '9' and '8' can be easily confused
        - '0' and 'O' (letter O) should not be mixed up
        - '1' and 'I' (letter I) should not be confused
-    6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
     8. Ensure no extra digits or characters are included that don't belong to the actual part number.
     9. Check if the number could be an upside-down non-VAG number:

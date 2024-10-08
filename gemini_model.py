@@ -160,10 +160,6 @@ class GeminiInference():
             # Update chat history
             self.chat_history.append({"role": "model", "parts": [response.text]})
             
-            # If this is a retry, add the retry prompt to the history
-            if len(self.chat_history) > 2:
-                self.chat_history.append({"role": "user", "parts": ["Please try again to identify the VAG part number in the image."]})
-            
             return response.text
         except Exception as e:
             if "quota" in str(e).lower():
@@ -301,6 +297,13 @@ class GeminiInference():
        
         # If NONE is returned, try one more time with the same prompt
         logging.info("Attempting one more time with the same prompt")
+        
+        # Add a retry prompt to the chat history
+        self.chat_history.append({
+            "role": "user", 
+            "parts": ["Please try again to identify the VAG part number in the image."]
+        })
+        
         retry_answer = self.get_response(img)  # This will use the updated chat history
         retry_extracted_number = self.extract_number(retry_answer)
         

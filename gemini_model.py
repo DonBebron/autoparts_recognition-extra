@@ -179,7 +179,10 @@ class GeminiInference():
     prompt = f"""
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
-    Rules for validation:
+    First, carefully examine the image and confirm that the extracted number {extracted_number} is actually visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
+
+    If you can find the exact number in the image, proceed with the following validation rules:
+
     1. The number should consist of 9-11 characters.
     2. It may or may not be visibly divided into groups.
     3. The structure should closely follow this pattern:
@@ -200,42 +203,20 @@ class GeminiInference():
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
-    If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
+    Based on your examination of the image and the validation rules, respond with one of the following:
+
+    If the exact number is found in the image and follows the rules:
     <VALID>
 
-    If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
+    If the exact number is found in the image but does not follow the rules:
     <INVALID>
 
- If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line in the upper right corner of the label that might contain the part number (which is usually bigger)):
-    <INVALID>
+    If the exact number is not found in the image:
+    <NOT_FOUND>
 
-    Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
-    """
+    If the number does not follow these rules at all or is not found, also include in your explanation a suggestion to look for another line in the upper right corner of the label that might contain the correct part number (which is usually bigger).
 
-    response = self.validator_model.generate_content(prompt)
-    return response.text
-
-  def double_check_confused_digits(self, extracted_number):
-    prompt = f"""
-    Double-check the following VAG part number for commonly confused digits and potential errors: {extracted_number}
-
-    Focus on:
-    1. '9' vs '8': Ensure these are correctly identified.
-    2. '0' vs 'O': Confirm all instances are digits, not letters.
-    3. '1' vs 'I': Verify these are correctly distinguished.
-    4. Check the last part of the number:
-       - It should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
-       - If it ends with a single letter, make sure it's not missing (e.g., "T" at the end)
-    5. Ensure no extra digits or characters are included that don't belong to the actual part number.
-
-    If you believe any digits might be incorrect or if there are any other issues, suggest the most likely correct version.
-
-    Response format:
-    <CORRECTED> [Corrected number if changes are needed]
-    or
-    <UNCHANGED> [Original number if no changes are needed]
-
-    Explanation: [Brief explanation of any changes or why no changes were needed]
+    Explanation: [Brief explanation of your findings, including whether the number was found in the image, why it's valid or invalid, and any concerns about it being upside-down or misread]
     """
 
     response = self.validator_model.generate_content(prompt)
@@ -267,24 +248,12 @@ class GeminiInference():
         if extracted_number.upper() != "NONE":
             validation_result = self.validate_number(extracted_number)
             if "<VALID>" in validation_result:
-                # Add an extra check for commonly confused digits
-                double_check_result = self.double_check_confused_digits(extracted_number)
-                if "<CORRECTED>" in double_check_result:
-                    corrected_number = double_check_result.split("<CORRECTED>")[1].split("\n")[0].strip()
-                    print(f"Number corrected after double-check: {corrected_number}")
-                    # Validate the corrected number
-                    final_validation = self.validate_number(corrected_number)
-                    if "<VALID>" in final_validation:
-                        self.reset_incorrect_predictions()
-                        self.prompt = original_prompt  # Reset prompt to original
-                        return corrected_number
-                    else:
-                        print(f"Corrected number failed validation: {final_validation}")
-                        self.incorrect_predictions.append(corrected_number)
-                elif "<UNCHANGED>" in double_check_result:
-                    self.reset_incorrect_predictions()
-                    self.prompt = original_prompt  # Reset prompt to original
-                    return extracted_number
+                self.reset_incorrect_predictions()
+                self.prompt = original_prompt  # Reset prompt to original
+                return extracted_number
+            elif "<NOT_FOUND>" in validation_result:
+                print(f"Extracted number not found in image (Attempt {attempt + 1}): {validation_result}")
+                self.incorrect_predictions.append(extracted_number)
             else:
                 print(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
                 self.incorrect_predictions.append(extracted_number)

@@ -104,11 +104,13 @@ class GeminiInference():
     ]
 
     self.model = genai.GenerativeModel(model_name=model_name,
-                                  generation_config=generation_config,
-                                  safety_settings=safety_settings)
+                                       generation_config=generation_config,
+                                       safety_settings=safety_settings,
+                                       system_instruction=self.prompt)
 
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
+    self.message_history = []
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -125,7 +127,7 @@ class GeminiInference():
                                  generation_config=generation_config,
                                  safety_settings=safety_settings)
 
-  def get_response(self, img_data):
+  def get_response(self, img_data, retry=False):
     max_retries = 20
     base_delay = 5  # Initial delay in seconds
     
@@ -139,16 +141,24 @@ class GeminiInference():
                     }
                 },
             ]
-            prompt_parts = [
-                image_parts[0],
-                (self.prompt if self.prompt is not None else "..."),  # Existing prompt
+            
+            prompt_parts = [] if not retry else [
+                "This is the exact same image as before. Please try again to identify the VAG part number in this image. "
+                "Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
             ]
+            
+            full_prompt = image_parts + prompt_parts
             
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
-            response = self.model.generate_content(prompt_parts)
-            logging.info(f"get_response output: {response.text}")
+            chat = self.model.start_chat(history=self.message_history)
+            response = chat.send_message(full_prompt)
+            logging.info(f"Main model response: {response.text}")
+            
+            # Update message history
+            self.message_history.append({"role": "user", "parts": full_prompt})
+            self.message_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
         except Exception as e:
@@ -246,11 +256,12 @@ class GeminiInference():
     ]
 
     response = self.validator_model.generate_content(prompt_parts)
-    logging.info(f"Validation response: {response.text}")
+    logging.info(f"Validator model response: {response.text}")
     return response.text
 
   def reset_incorrect_predictions(self):
     self.incorrect_predictions = []
+    self.message_history = []  # Reset message history along with incorrect predictions
 
   def __call__(self, image_path):
     # Handle remote or local images
@@ -264,6 +275,9 @@ class GeminiInference():
         if not img.exists():
             raise FileNotFoundError(f"Could not find image: {img}")
         img_data = img
+
+    # Reset message history for new image
+    self.message_history = []
 
     # Generate response and extract number
     answer = self.get_response(img_data)
@@ -289,9 +303,7 @@ class GeminiInference():
         # If NONE is returned, try one more time with the same prompt
         logging.info("Attempting one more time with the same image")
         
-        retry_prompt = self.prompt + "\n\nThis is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
-        
-        retry_answer = self.get_response(img_data)  # This will use the retry prompt
+        retry_answer = self.get_response(img_data, retry=True)  # This will use the retry prompt and message history
         retry_extracted_number = self.extract_number(retry_answer)
         
         logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")

@@ -226,7 +226,7 @@ class GeminiInference():
        - '9' and '8' can be easily confused
        - '0' and 'O' (letter O) should not be mixed up
        - '1' and 'I' (letter I) should not be confused
-    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits), for example, number "868 417 0V6 90" is invalid because index part "90" contains digits.
     7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
     8. Ensure no extra digits or characters are included that don't belong to the actual part number.
     9. Check if the number could be an upside-down non-VAG number:

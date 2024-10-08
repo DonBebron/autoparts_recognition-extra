@@ -149,7 +149,7 @@ class GeminiInference():
             if not self.chat_history:
                 chat = self.model.start_chat()
                 self.chat_history = [
-                    {"role": "user", "parts": prompt_parts}
+                    {"role": "user", "parts": [image_parts[0]]},
                 ]
             else:
                 chat = self.model.start_chat(history=self.chat_history)
@@ -301,7 +301,7 @@ class GeminiInference():
         # Add a retry prompt to the chat history, emphasizing it's the same image
         self.chat_history.append({
             "role": "user", 
-            "parts": ["This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
+            "parts": [image_parts[0], "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
         })
         
         retry_answer = self.get_response(img)  # This will use the updated chat history

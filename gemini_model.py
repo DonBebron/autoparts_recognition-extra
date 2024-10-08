@@ -59,6 +59,12 @@ Provide the response in this format:
 - No valid number found: `<START> NONE <END>`
 
 Include spaces between number segments as shown in the example structure above.
+
+Please follow the above steps to recognize the correct detail number and format the response as follows:
+
+**Response Format:**
+- If a part number is identified: `<START> [VAG Part Number] <END>`
+- If no valid number is identified: `<START> NONE <END>`
 """
 
 class GeminiInference():
@@ -171,57 +177,39 @@ class GeminiInference():
 
   def validate_number(self, extracted_number):
     prompt = f"""
-    Perform a rigorous validation of the following VAG (Volkswagen Audi Group) part number: {extracted_number}
+    Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
-    Comprehensive Validation Criteria:
-    1. Length and Format:
-       - Total length should be 11-13 characters (including spaces).
-       - Format: [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
-       - Example: 5K0 937 087 AC Z15
-
-    2. Detailed Component Analysis:
-       a) First Number (3 characters):
-          - First two digits: Must match known vehicle types (e.g., 3D, 1J, 8L)
-          - Third digit: Should indicate a valid body shape or variant (0-9)
-       b) Middle Number (3 digits):
-          - First digit: Must correspond to a valid main group (1-9)
-          - Last two digits: Should be a valid subgroup within the main group
-       c) Final Number (3 digits):
-          - Should be a logical part identifier within the subgroup
-          - Check if odd/even aligns with left/right part designation (if applicable)
-       d) Index (1-2 letters, if present):
-          - Should be valid alphabetic characters
-          - 'X' might indicate an exchange or remanufactured part
-       e) Software Variant (2-3 characters, if present):
-          - Often starts with 'Z' followed by numbers
-
-    3. Logical Consistency:
-       - Ensure the combination of vehicle type, main group, and subgroup is plausible.
-       - Check if the part number aligns with any visible part characteristics in the image.
-
-    4. Special Cases and Exceptions:
-       - Standard parts: May start with 9xx.xxx or 052.xxx
-       - Color codes: Look for known color designations (e.g., GRU for primed parts)
-
-    5. Character Verification:
-       - Double-check for common misinterpretations:
-         '1' vs 'I', '0' vs 'O', '8' vs 'B', '5' vs 'S', '2' vs 'Z'
-       - Ensure no inappropriate characters are present (e.g., symbols, punctuation)
-
-    6. Contextual Validation:
-       - Consider if the number makes sense for the apparent part or vehicle type visible in the image.
-       - Check for any contradictory information in the image (e.g., non-VAG logos)
-
-    7. Upside-Down Check:
-       - Verify the number isn't an inverted non-VAG number that coincidentally looks valid.
+    Rules for validation:
+    1. The number should consist of 9-11 characters.
+    2. It may or may not be visibly divided into groups.
+    3. The structure should closely follow this pattern:
+       - First part: 3 characters (e.g., "5Q0", "8S0")
+       - Middle part: 3 digits (e.g., "937", "907")
+       - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+    4. The entire number may be continuous without spaces, but should still follow the above structure.
+    5. Pay extra attention to commonly confused digits:
+       - '9' and '8' can be easily confused
+       - '0' and 'O' (letter O) should not be mixed up
+       - '1' and 'I' (letter I) should not be confused
+    6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+    7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+    8. Ensure no extra digits or characters are included that don't belong to the actual part number.
+    9. Check if the number could be an upside-down non-VAG number:
+       - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
+       - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
 
     Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
-    Based on this comprehensive analysis, respond with:
-    <VALID> if the number passes all relevant checks.
-    <INVALID> if it fails any crucial validation criteria.
+    If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
+    <VALID>
 
-    Explanation: [Provide a detailed explanation of your validation process, highlighting any specific points of concern or confirmation]
+    If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
+    <INVALID>
+
+ If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line in the upper right corner of the label that might contain the part number (which is usually bigger)):
+    <INVALID>
+
+    Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
     """
 
     response = self.validator_model.generate_content(prompt)
@@ -229,48 +217,25 @@ class GeminiInference():
 
   def double_check_confused_digits(self, extracted_number):
     prompt = f"""
-    Perform an in-depth analysis of the following VAG part number, focusing on potential digit confusions and errors: {extracted_number}
+    Double-check the following VAG part number for commonly confused digits and potential errors: {extracted_number}
 
-    Detailed Examination Points:
-    1. Digit Pair Analysis:
-       - '9' vs '8': Carefully distinguish, considering context (e.g., is it more likely to be a subgroup 9xx or 8xx?)
-       - '0' vs 'O': Ensure all instances are digits, not letters. Check against known formats.
-       - '1' vs 'I': Verify correct identification, especially in the first number group.
-       - '5' vs 'S': Confirm in context, particularly in the index portion.
-       - '2' vs 'Z': Differentiate, especially in the software variant section.
+    Focus on:
+    1. '9' vs '8': Ensure these are correctly identified.
+    2. '0' vs 'O': Confirm all instances are digits, not letters.
+    3. '1' vs 'I': Verify these are correctly distinguished.
+    4. Check the last part of the number:
+       - It should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+       - If it ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+    5. Ensure no extra digits or characters are included that don't belong to the actual part number.
 
-    2. Structural Integrity Check:
-       a) First Number (3 characters):
-          - Verify the first two digits match a known vehicle type.
-          - Ensure the third digit is a valid body shape indicator (0-9).
-       b) Middle Number (3 digits):
-          - Confirm the first digit corresponds to a valid main group (1-9).
-          - Check if the last two digits form a valid subgroup for that main group.
-       c) Final Number (3 digits):
-          - Assess if it's a plausible part identifier within the subgroup.
-          - For paired parts, verify if odd/even aligns with left/right designation.
+    If you believe any digits might be incorrect or if there are any other issues, suggest the most likely correct version.
 
-    3. Index and Software Variant Verification:
-       - If present, ensure the index uses valid characters (typically 1-2 letters).
-       - For software variants, confirm it starts with 'Z' if applicable.
+    Response format:
+    <CORRECTED> [Corrected number if changes are needed]
+    or
+    <UNCHANGED> [Original number if no changes are needed]
 
-    4. Logical Sequence Analysis:
-       - Evaluate if the entire number forms a logical sequence for a VAG part.
-       - Check for any digits that seem out of place or inconsistent with the rest of the number.
-
-    5. Special Format Considerations:
-       - For numbers starting with 9xx.xxx or 052.xxx, verify they follow standard part numbering rules.
-       - For potential color codes or exchange parts, ensure proper formatting (e.g., 'X' for exchange parts).
-
-    6. Contextual Plausibility:
-       - Consider if the number makes sense for the type of part visible in the image.
-       - Check for any contradictions between the number and visible part characteristics.
-
-    Based on this comprehensive analysis, respond with:
-    <CORRECTED> [Corrected number] if any changes are needed, along with a detailed explanation of each correction.
-    <UNCHANGED> [Original number] if no changes are needed, with an explanation of why it's deemed correct.
-
-    Explanation: [Provide a thorough breakdown of your analysis, including any potential issues identified and how you resolved them]
+    Explanation: [Brief explanation of any changes or why no changes were needed]
     """
 
     response = self.validator_model.generate_content(prompt)
@@ -338,20 +303,19 @@ class GeminiInference():
             Please re-examine the image carefully and try to identify a valid VAG part number.
             Focus on the following:
             1. Look for numbers that are larger or more prominent in the image.
-            2. Try to look on the upper part of the label or above any barcodes.
-            3. Remember the VAG part number structure: [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
-               Example: 5K0 937 087 AC Z15
-            4. The first three parts (First Number, Middle Number, Final Number) are most crucial and should always be present.
-            5. The Index and Software Variant may not always be visible or present.
-            6. Be cautious of upside-down numbers that might look like VAG numbers when flipped.
+            2. Try to look on the upper part of the label.
+            3. Examine any barcodes in the image, as the part number might be printed above them.
+            4. If there are multiple numbers, prioritize those that match the VAG part number format.
+            5. Be cautious of upside-down numbers that might look like VAG numbers when flipped:
+               - Check if any identified numbers make more sense when read upside-down
+               - Ensure the number you're reading is oriented correctly on the label
 
             Remember, a valid VAG part number typically:
-            - Consists of 11-13 characters (including spaces)
-            - Has a first group of 3 characters (e.g., "5K0", "4H0")
-            - Has a second group of 3 digits (e.g., "937", "907")
-            - Has a third group of 3 digits (e.g., "087", "085")
-            - May have an index of 1-2 letters (e.g., "AC", "B")
-            - May have a software variant, often starting with Z (e.g., "Z15", "Z4")
+            - Consists of 9-11 characters
+            - Is often divided into three groups (e.g., "1K2 820 015 C")
+            - Has a first group of 3 characters (e.g., "1K2", "4H0")
+            - Has a second group of 3 digits (e.g., "820", "907")
+            - Has a third group of 3-4 characters, sometimes ending with a letter (e.g., "015 C", "801 E")
 
             If you find a number matching this format, please provide it.
             If you still can't find a valid number, respond with NONE.

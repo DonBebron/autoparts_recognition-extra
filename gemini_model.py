@@ -182,11 +182,17 @@ class GeminiInference():
       return self.format_part_number(number)
     return number
 
-  def validate_number(self, extracted_number):
+  def validate_number(self, extracted_number, img):
+    image_parts = [
+        {
+            "mime_type": "image/jpeg",
+            "data": img.read_bytes()
+        },
+    ]
     prompt = f"""
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
-    First, carefully examine the image and confirm that the extracted number {extracted_number} is actually visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
+    Carefully examine the provided image and confirm that the extracted number {extracted_number} is actually visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
 
     If you can find the exact number in the image, proceed with the following validation rules:
 
@@ -226,7 +232,13 @@ class GeminiInference():
     Explanation: [Brief explanation of your findings, including whether the number was found in the image, why it's valid or invalid, and any concerns about it being upside-down or misread]
     """
 
-    response = self.validator_model.generate_content(prompt)
+    prompt_parts = [
+        image_parts[0],
+        prompt,
+    ]
+
+    response = self.validator_model.generate_content(prompt_parts)
+    logging.info(f"Validation response: {response.text}")
     return response.text
 
   def reset_incorrect_predictions(self):
@@ -255,7 +267,7 @@ class GeminiInference():
         logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
         
         if extracted_number.upper() != "NONE":
-            validation_result = self.validate_number(extracted_number)
+            validation_result = self.validate_number(extracted_number, img)
             if "<VALID>" in validation_result:
                 logging.info(f"Valid number found: {extracted_number}")
                 self.reset_incorrect_predictions()

@@ -127,22 +127,38 @@ class GeminiInference():
                                  safety_settings=safety_settings)
 
   def get_response(self, img_data):
-    image_parts = [
-        {
-            "mime_type": "image/jpeg",
-            "data": img_data.read() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
-        },
-    ]
-    prompt_parts = [
-        image_parts[0],
-        (self.prompt if self.prompt is not None else "..."),  # Existing prompt
-    ]
-    
     max_retries = 20
     base_delay = 5  # Initial delay in seconds
     
     for attempt in range(max_retries):
         try:
+            # Convert image to PNG format
+            if isinstance(img_data, io.BytesIO):
+                img_data.seek(0)  # Reset the file pointer to the beginning
+                img = Image.open(img_data)
+            else:
+                img = Image.open(img_data)
+            
+            # Convert to RGB if the image is in RGBA mode
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            
+            # Save as PNG in memory
+            png_buffer = io.BytesIO()
+            img.save(png_buffer, format='PNG')
+            png_buffer.seek(0)
+            
+            image_parts = [
+                {
+                    "mime_type": "image/png",
+                    "data": png_buffer.getvalue()
+                },
+            ]
+            prompt_parts = [
+                image_parts[0],
+                (self.prompt if self.prompt is not None else "..."),  # Existing prompt
+            ]
+            
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
@@ -151,7 +167,7 @@ class GeminiInference():
             logging.info(f"get_response output: {response.text}")
             
             # Update chat history with the correct format
-            self.chat_history.append({"role": "user", "parts": [{"type": "image", "data": image_parts[0]}, self.prompt]})
+            self.chat_history.append({"role": "user", "parts": [{"type": "image", "data": image_parts[0]['data']}, self.prompt]})
             self.chat_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
@@ -160,9 +176,12 @@ class GeminiInference():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                 logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                 sleep(delay)
+            elif "Unable to process input image" in str(e):
+                logging.warning(f"Unable to process image. Attempt {attempt + 1}/{max_retries}. Retrying with different format...")
+                # The retry will happen automatically in the next iteration
             else:
                 logging.error(f"Error in get_response: {str(e)}")
-                raise  # Re-raise the exception if it's not a rate limit error
+                raise  # Re-raise the exception if it's not a rate limit error or image processing error
     
     logging.error("Max retries reached. Unable to get a response.")
     raise Exception("Max retries reached. Unable to get a response.")
@@ -190,13 +209,31 @@ class GeminiInference():
       return self.format_part_number(number)
     return number
 
-  def validate_number(self, extracted_number, img):
+  def validate_number(self, extracted_number, img_data):
+    # Convert image to PNG format
+    if isinstance(img_data, io.BytesIO):
+        img_data.seek(0)  # Reset the file pointer to the beginning
+        img = Image.open(img_data)
+    else:
+        img = Image.open(img_data)
+    
+    # Convert to RGB if the image is in RGBA mode
+    if img.mode == 'RGBA':
+        img = img.convert('RGB')
+    
+    # Save as PNG in memory
+    png_buffer = io.BytesIO()
+    img.save(png_buffer, format='PNG')
+    png_buffer.seek(0)
+    
     image_parts = [
         {
-            "mime_type": "image/jpeg",
-            "data": img.read_bytes()
+            "mime_type": "image/png",
+            "data": png_buffer.getvalue()
         },
     ]
+    
+    # Rest of the method remains the same
     prompt = f"""
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 

@@ -4,10 +4,14 @@ import google.generativeai as genai
 from pathlib import Path
 from time import sleep
 import random
+import logging
 
 from PIL import Image
 import requests
 import re
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 DEFAULT_PROMPT = """Identify the VAG (Volkswagen Audi Group) part number from the photo using this comprehensive algorithm:
 
@@ -141,15 +145,18 @@ class GeminiInference():
             sleep(random.uniform(1, 3))
             
             response = self.model.generate_content(prompt_parts)
+            logging.info(f"get_response output: {response.text}")
             return response.text
         except Exception as e:
             if "quota" in str(e).lower():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                print(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
+                logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                 sleep(delay)
             else:
+                logging.error(f"Error in get_response: {str(e)}")
                 raise  # Re-raise the exception if it's not a rate limit error
     
+    logging.error("Max retries reached. Unable to get a response.")
     raise Exception("Max retries reached. Unable to get a response.")
 
   def format_part_number(self, number):
@@ -245,20 +252,23 @@ class GeminiInference():
         answer = self.get_response(img)
         extracted_number = self.extract_number(answer)
         
+        logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
+        
         if extracted_number.upper() != "NONE":
             validation_result = self.validate_number(extracted_number)
             if "<VALID>" in validation_result:
+                logging.info(f"Valid number found: {extracted_number}")
                 self.reset_incorrect_predictions()
                 self.prompt = original_prompt  # Reset prompt to original
                 return extracted_number
             elif "<NOT_FOUND>" in validation_result:
-                print(f"Extracted number not found in image (Attempt {attempt + 1}): {validation_result}")
+                logging.warning(f"Extracted number not found in image (Attempt {attempt + 1}): {validation_result}")
                 self.incorrect_predictions.append(extracted_number)
             else:
-                print(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
+                logging.warning(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
                 self.incorrect_predictions.append(extracted_number)
         else:
-            print(f"No number found (Attempt {attempt + 1})")
+            logging.warning(f"No number found (Attempt {attempt + 1})")
 
         # If this is not the last attempt, create a more specific prompt for the next try
         if attempt < max_attempts - 1:
@@ -295,7 +305,9 @@ class GeminiInference():
             """
             
             self.prompt = specific_prompt
+            logging.info(f"Updated prompt for attempt {attempt + 2}")
 
+    logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page
     self.prompt = original_prompt  # Reset prompt to original
     return "NONE"

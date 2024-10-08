@@ -209,66 +209,52 @@ class GeminiInference():
     ]
     
     prompt = f"""
-    Validate the following VAG (Volkswagen Audi Group) part number: {formatted_number}
+    Strictly validate the following VAG (Volkswagen Audi Group) part number: {formatted_number}
 
-    Examine the provided image and confirm that the extracted number {formatted_number} is actually highly visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
+    Examine the provided image meticulously and confirm that the extracted number {formatted_number} is EXACTLY and CLEARLY visible in the image. Look for this precise sequence of characters, focusing on labels, stickers, or embossed areas.
 
-    If you can find the exact number in the image, proceed with the following validation rules:
+    Validation Rules (ALL MUST BE MET for a VALID result):
 
-    1. The number should consist of 9-13 characters.
-    2. It may or may not be visibly divided into groups.
-    3. The structure should closely follow this pattern:
-       [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
+    1. Exact Match: The number in the image must EXACTLY match {formatted_number}, including all spaces and characters.
+    2. Clear Visibility: The number must be clearly readable and not obscured or partially visible.
+    3. Correct Location: Typically found on labels, near barcodes, or embossed on the part itself.
+    4. Proper Format: Must strictly follow the pattern [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
        Example: 5K0 937 087 AC Z15
        
+    5. Component Breakdown (each part must be correct):
        a) First Number (3 characters):
-          - First two digits: Vehicle type (e.g., 3D = Phaeton, 1J = Golf IV, 8L = Audi A3)
-          - Third digit: Body shape or variant (0 = general, 1 = left-hand drive, 2 = right-hand drive, etc.)
+          - First two digits: Valid vehicle type code
+          - Third digit: Valid body shape or variant code (0-9)
        b) Middle Number (3 digits):
-          - First digit: Main group (e.g., 1 = engine, 2 = fuel/exhaust, 3 = transmission, 4 = front axle, 5 = rear axle)
-          - Last two digits: Subgroup within the main group
+          - First digit: Valid main group code (0-9)
+          - Last two digits: Valid subgroup code
        c) Final Number (3 digits):
-          - Identifies specific part within subgroup
-          - Odd numbers often indicate left parts, even numbers right parts
-       d) Index (1-2 LETTERS): Identifies variants, revisions, or colors
-       e) Software Variant (2-3 characters): Often starts with Z (e.g., Z15, Z4)
+          - Must be a valid specific part identifier
+       d) Index (if present): 1-2 letters only
+       e) Software Variant (if present): Must start with Z followed by numbers
 
-    4. The entire number may be continuous without spaces, but should still follow the above structure.
-    5. Pay extra attention to commonly confused digits:
-       - '9' and '8' can be easily confused
-       - '0' and 'O' (letter O) should not be mixed up
-       - '1' and 'I' (letter I) should not be confused
-    6. The last part SHOULD NOT contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits).
-    7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
-    8. Ensure no extra digits or characters are included that don't belong to the actual part number.
-    9. Check if the number could be an upside-down non-VAG number:
-       - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
-    10. Special cases:
-        - Exchange parts or remanufactured parts are marked with an 'X'
-        - Color codes: e.g., GRU for primed parts requiring painting
-        - Standard parts: May start with 9xx.xxx or 052.xxx
-        - Parts starting with G = lubricant, coolant
-        - Parts starting with D = sealant and adhesive material
-        - Parts starting with B = brake fluid and brake paste
+    6. No Digit-Letter Confusion:
+       - '1' and 'I', '0' and 'O', '8' and 'B', '5' and 'S', '2' and 'Z' must not be confused
+    7. No Upside-Down Numbers: Ensure the number isn't an inverted non-VAG number
+    8. Special Cases (if applicable):
+       - Exchange parts: Marked with 'X' at the end
+       - Standard parts: May start with 9xx.xxx or 052.xxx
+       - Specific prefixes: 'G' for lubricants, 'D' for sealants, 'B' for brake fluids
 
-    MAKE SURE THAT STEP 6 IS FOLLOWED.
-       
-    Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
+    Previously incorrect predictions: {', '.join(self.incorrect_predictions)}
 
-    Based on your examination of the image and the validation rules, respond with one of the following:
+    Based on your strict examination, respond ONLY with one of the following:
 
-    If the exact number is found in the image and follows the rules:
+    If ALL validation rules are met and the exact number is found:
     <VALID>
 
-    If the exact number is found in the image but does not follow the rules:
+    If the exact number is found but ANY rule is violated:
     <INVALID>
 
     If the exact number is not found in the image:
     <NOT_FOUND>
 
-    If the number does not follow these rules at all or is not found, also include in your explanation a suggestion to look for another line in the upper right corner of the label that might contain the correct part number (which is usually bigger).
-
-    Explanation: [Brief explanation of your findings, including whether the number was found in the image, why it's valid or invalid, and any concerns about it being upside-down or misread]
+    Explanation: [Concise explanation of your findings, including specific reasons for invalidity or not found status]
     """
 
     prompt_parts = [

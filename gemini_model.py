@@ -143,7 +143,7 @@ class GeminiInference():
             ]
             
             prompt_parts = [] if not retry else [
-                "It is not correct. Try again."
+                "It is not correct. Try again. The number is highly visible and clear."
             ]
             
             full_prompt = image_parts + prompt_parts

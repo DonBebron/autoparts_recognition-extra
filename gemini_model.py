@@ -294,14 +294,14 @@ class GeminiInference():
             self.incorrect_predictions.append(extracted_number)
     else:
         logging.warning("No number found")
-       
-        # If NONE is returned, try one more time with the same prompt
-        logging.info("Attempting one more time with the same prompt")
         
-        # Add a retry prompt to the chat history
+        # If NONE is returned, try one more time with the same prompt
+        logging.info("Attempting one more time with the same image")
+        
+        # Add a retry prompt to the chat history, emphasizing it's the same image
         self.chat_history.append({
             "role": "user", 
-            "parts": ["Please try again to identify the VAG part number in the image."]
+            "parts": ["This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
         })
         
         retry_answer = self.get_response(img)  # This will use the updated chat history

@@ -267,90 +267,46 @@ class GeminiInference():
     if not (img := Path(image_path)).exists():
         raise FileNotFoundError(f"Could not find image: {img}")
 
-    max_attempts = 3
-    original_prompt = self.prompt
-
-    for attempt in range(max_attempts):
-        # Generate response and extract number
-        answer = self.get_response(img)
-        extracted_number = self.extract_number(answer)
-        
-        logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
-        
-        if extracted_number.upper() != "NONE":
-            validation_result = self.validate_number(extracted_number, img)
-            if "<VALID>" in validation_result:
-                logging.info(f"Valid number found: {extracted_number}")
-                self.reset_incorrect_predictions()
-                self.prompt = original_prompt  # Reset prompt to original
-                return extracted_number
-            elif "<NOT_FOUND>" in validation_result:
-                logging.warning(f"Extracted number not found in image (Attempt {attempt + 1}): {validation_result}")
-                self.incorrect_predictions.append(extracted_number)
-            else:
-                logging.warning(f"Validation failed (Attempt {attempt + 1}): {validation_result}")
-                self.incorrect_predictions.append(extracted_number)
+    # Generate response and extract number
+    answer = self.get_response(img)
+    extracted_number = self.extract_number(answer)
+    
+    logging.info(f"Extracted number: {extracted_number}")
+    
+    if extracted_number.upper() != "NONE":
+        validation_result = self.validate_number(extracted_number, img)
+        if "<VALID>" in validation_result:
+            logging.info(f"Valid number found: {extracted_number}")
+            self.reset_incorrect_predictions()
+            return extracted_number
+        elif "<NOT_FOUND>" in validation_result:
+            logging.warning(f"Extracted number not found in image: {validation_result}")
+            self.incorrect_predictions.append(extracted_number)
         else:
-            logging.warning(f"No number found (Attempt {attempt + 1})")
-           
-            # If NONE is returned, try one more time with the same prompt
-            logging.info("Attempting one more time with the same prompt")
-            retry_answer = self.get_response(img)
-            retry_extracted_number = self.extract_number(retry_answer)
-            
-            logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
-            
-            if retry_extracted_number.upper() != "NONE":
-                validation_result = self.validate_number(retry_extracted_number, img)
-                if "<VALID>" in validation_result:
-                    logging.info(f"Valid number found in retry: {retry_extracted_number}")
-                    self.reset_incorrect_predictions()
-                    self.prompt = original_prompt  # Reset prompt to original
-                    return retry_extracted_number
-                else:
-                    logging.warning(f"Retry validation failed: {validation_result}")
-                    self.incorrect_predictions.append(retry_extracted_number)
+            logging.warning(f"Validation failed: {validation_result}")
+            self.incorrect_predictions.append(extracted_number)
+    else:
+        logging.warning("No number found")
+       
+        # If NONE is returned, try one more time with the same prompt
+        logging.info("Attempting one more time with the same prompt")
+        retry_answer = self.get_response(img)
+        retry_extracted_number = self.extract_number(retry_answer)
+        
+        logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
+        
+        if retry_extracted_number.upper() != "NONE":
+            validation_result = self.validate_number(retry_extracted_number, img)
+            if "<VALID>" in validation_result:
+                logging.info(f"Valid number found in retry: {retry_extracted_number}")
+                self.reset_incorrect_predictions()
+                return retry_extracted_number
             else:
-                logging.warning("No number found in retry attempt")
-
-        # If this is not the last attempt, create a more specific prompt for the next try
-        if attempt < max_attempts - 1:
-            specific_prompt = f"""
-            {original_prompt}
-
-            Additional instructions for attempt {attempt + 2}:
-            {f'The previously extracted number "{extracted_number}" was invalid.' if extracted_number.upper() != "NONE" else "No valid number was found in the previous attempt(s)."}
-            Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
-
-            Please re-examine the image carefully and try to identify a valid VAG part number.
-            Focus on the following:
-            1. Look for numbers that are larger or more prominent in the image.
-            2. Try to look on the upper part of the label.
-            3. Examine any barcodes in the image, as the part number might be printed above them.
-            4. If there are multiple numbers, prioritize those that match the VAG part number format.
-            5. Be cautious of upside-down numbers that might look like VAG numbers when flipped:
-               - Check if any identified numbers make more sense when read upside-down
-               - Ensure the number you're reading is oriented correctly on the label
-
-            Remember, a valid VAG part number typically:
-            - Consists of 9-11 characters
-            - Is often divided into three groups (e.g., "1K2 820 015 C")
-            - Has a first group of 3 characters (e.g., "1K2", "4H0")
-            - Has a second group of 3 digits (e.g., "820", "907")
-            - Has a third group of 3-4 characters, sometimes ending with a letter (e.g., "015 C", "801 E")
-
-            If you find a number matching this format, please provide it.
-            If you still can't find a valid number, respond with NONE.
-
-            Response Format:
-            - If a valid part number is identified: <START> [VAG Part Number] <END>
-            - If no valid number is identified: <START> NONE <END>
-            """
-            
-            self.prompt = specific_prompt
-            logging.info(f"Updated prompt for attempt {attempt + 2}")
+                logging.warning(f"Retry validation failed: {validation_result}")
+                self.incorrect_predictions.append(retry_extracted_number)
+        else:
+            logging.warning("No number found in retry attempt")
 
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page
-    self.prompt = original_prompt  # Reset prompt to original
     return "NONE"

@@ -196,6 +196,9 @@ class GeminiInference():
     return number
 
   def validate_number(self, extracted_number, img_data):
+    # Format the extracted number before validation
+    formatted_number = self.format_part_number(extracted_number)
+    
     image_parts = [
         {
             "inline_data": {
@@ -205,11 +208,10 @@ class GeminiInference():
         },
     ]
     
-    # Rest of the method remains the same
     prompt = f"""
-    Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
+    Validate the following VAG (Volkswagen Audi Group) part number: {formatted_number}
 
-    Examine the provided image and confirm that the extracted number {extracted_number} is actually highly visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
+    Examine the provided image and confirm that the extracted number {formatted_number} is actually highly visible in the image. Look for this exact sequence of characters, paying attention to labels, stickers, or any printed/embossed areas.
 
     If you can find the exact number in the image, proceed with the following validation rules:
 

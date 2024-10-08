@@ -38,7 +38,7 @@ DEFAULT_PROMPT = """Identify the VAG (Volkswagen Audi Group) part number from th
    c) Final Number (3 digits):
       - Identifies specific part within subgroup
       - Odd numbers often indicate left parts, even numbers right parts
-   d) Index (1-2 letters): Identifies variants, revisions, or colors
+   d) Index (1-2 LETTERS): Identifies variants, revisions, or colors
    e) Software Variant (2-3 characters): Often starts with Z (e.g., Z15, Z4)
 
 3. **Identify and Verify with Precision:**

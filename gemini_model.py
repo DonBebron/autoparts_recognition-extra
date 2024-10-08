@@ -108,6 +108,7 @@ class GeminiInference():
 
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
+    self.chat_history = []
 
   def create_validator_model(self, model_name):
     # Create a separate model instance for validation
@@ -144,8 +145,14 @@ class GeminiInference():
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
-            response = self.model.generate_content(prompt_parts)
+            chat = self.model.start_chat(history=self.chat_history)
+            response = chat.send_message(prompt_parts)
             logging.info(f"get_response output: {response.text}")
+            
+            # Update chat history
+            self.chat_history.append({"role": "user", "parts": prompt_parts})
+            self.chat_history.append({"role": "model", "parts": [response.text]})
+            
             return response.text
         except Exception as e:
             if "quota" in str(e).lower():
@@ -243,8 +250,12 @@ class GeminiInference():
 
   def reset_incorrect_predictions(self):
     self.incorrect_predictions = []
+    self.chat_history = []  # Reset chat history when resetting predictions
 
   def __call__(self, image_path):
+    # Reset chat history for new image
+    self.chat_history = []
+    
     # Validate that an image is present
     if image_path.startswith('http'):
         # read remote img bytes
@@ -281,6 +292,26 @@ class GeminiInference():
                 self.incorrect_predictions.append(extracted_number)
         else:
             logging.warning(f"No number found (Attempt {attempt + 1})")
+           
+            # If NONE is returned, try one more time with the same prompt
+            logging.info("Attempting one more time with the same prompt")
+            retry_answer = self.get_response(img)
+            retry_extracted_number = self.extract_number(retry_answer)
+            
+            logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
+            
+            if retry_extracted_number.upper() != "NONE":
+                validation_result = self.validate_number(retry_extracted_number, img)
+                if "<VALID>" in validation_result:
+                    logging.info(f"Valid number found in retry: {retry_extracted_number}")
+                    self.reset_incorrect_predictions()
+                    self.prompt = original_prompt  # Reset prompt to original
+                    return retry_extracted_number
+                else:
+                    logging.warning(f"Retry validation failed: {validation_result}")
+                    self.incorrect_predictions.append(retry_extracted_number)
+            else:
+                logging.warning("No number found in retry attempt")
 
         # If this is not the last attempt, create a more specific prompt for the next try
         if attempt < max_attempts - 1:

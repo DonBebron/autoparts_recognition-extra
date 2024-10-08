@@ -125,16 +125,16 @@ class GeminiInference():
                                  generation_config=generation_config,
                                  safety_settings=safety_settings)
 
-  def upload_to_gemini(self, path, mime_type=None):
-    """Uploads the given file to Gemini."""
-    file = genai.upload_file(path, mime_type=mime_type)
-    logging.info(f"Uploaded file '{file.display_name}' as: {file.uri}")
-    return file
-
-  def get_response(self, file):
+  def get_response(self, img):
+    image_parts = [
+        {
+            "mime_type": "image/jpeg",
+            "data": img.read_bytes()
+        },
+    ]
     prompt_parts = [
-        file,
-        (self.prompt if self.prompt is not None else "..."),
+        image_parts[0],
+        (self.prompt if self.prompt is not None else "..."),  # Existing prompt
     ]
     
     max_retries = 20
@@ -145,32 +145,13 @@ class GeminiInference():
             # Add a small random delay before each request
             sleep(random.uniform(1, 3))
             
-            # If it's the first attempt, start a new chat
-            if not self.chat_history:
-                chat = self.model.start_chat(
-                    history=[
-                        {
-                            "role": "user",
-                            "parts": [file],
-                        }
-                    ]
-                )
-                self.chat_history = chat.history
-            else:
-                chat = self.model.start_chat(history=self.chat_history)
-            
+            chat = self.model.start_chat(history=self.chat_history)
             response = chat.send_message(prompt_parts)
             logging.info(f"get_response output: {response.text}")
             
             # Update chat history
-            self.chat_history.append({
-                "role": "user",
-                "parts": prompt_parts,
-            })
-            self.chat_history.append({
-                "role": "model",
-                "parts": [response.text],
-            })
+            self.chat_history.append({"role": "user", "parts": prompt_parts})
+            self.chat_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
         except Exception as e:
@@ -208,7 +189,13 @@ class GeminiInference():
       return self.format_part_number(number)
     return number
 
-  def validate_number(self, extracted_number, file):
+  def validate_number(self, extracted_number, img):
+    image_parts = [
+        {
+            "mime_type": "image/jpeg",
+            "data": img.read_bytes()
+        },
+    ]
     prompt = f"""
     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
 
@@ -253,7 +240,7 @@ class GeminiInference():
     """
 
     prompt_parts = [
-        file,
+        image_parts[0],
         prompt,
     ]
 
@@ -264,6 +251,7 @@ class GeminiInference():
   def reset_incorrect_predictions(self):
     self.incorrect_predictions = []
     self.chat_history = []  # Reset chat history when resetting predictions
+
   def __call__(self, image_path):
     # Reset chat history for new image
     self.chat_history = []
@@ -276,20 +264,17 @@ class GeminiInference():
         img.save("example_image.jpg")
         image_path = "example_image.jpg"
 
-    if not Path(image_path).exists():
-        raise FileNotFoundError(f"Could not find image: {image_path}")
-
-    # Upload the image to Gemini
-    uploaded_file = self.upload_to_gemini(image_path, mime_type="image/jpeg")
+    if not (img := Path(image_path)).exists():
+        raise FileNotFoundError(f"Could not find image: {img}")
 
     # Generate response and extract number
-    answer = self.get_response(uploaded_file)
+    answer = self.get_response(img)
     extracted_number = self.extract_number(answer)
     
     logging.info(f"Extracted number: {extracted_number}")
     
     if extracted_number.upper() != "NONE":
-        validation_result = self.validate_number(extracted_number, uploaded_file)
+        validation_result = self.validate_number(extracted_number, img)
         if "<VALID>" in validation_result:
             logging.info(f"Valid number found: {extracted_number}")
             self.reset_incorrect_predictions()
@@ -309,16 +294,16 @@ class GeminiInference():
         # Add a retry prompt to the chat history, emphasizing it's the same image
         self.chat_history.append({
             "role": "user", 
-            "parts": [uploaded_file, "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
+            "parts": [img, "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
         })
         
-        retry_answer = self.get_response(uploaded_file)  # This will use the updated chat history
+        retry_answer = self.get_response(img)  # This will use the updated chat history
         retry_extracted_number = self.extract_number(retry_answer)
         
         logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
         
         if retry_extracted_number.upper() != "NONE":
-            validation_result = self.validate_number(retry_extracted_number, uploaded_file)
+            validation_result = self.validate_number(retry_extracted_number, img)
             if "<VALID>" in validation_result:
                 logging.info(f"Valid number found in retry: {retry_extracted_number}")
                 self.reset_incorrect_predictions()

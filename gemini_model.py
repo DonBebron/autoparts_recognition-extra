@@ -9,6 +9,7 @@ import logging
 from PIL import Image
 import requests
 import re
+import io
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -125,11 +126,11 @@ class GeminiInference():
                                  generation_config=generation_config,
                                  safety_settings=safety_settings)
 
-  def get_response(self, img):
+  def get_response(self, img_data):
     image_parts = [
         {
             "mime_type": "image/jpeg",
-            "data": img.read_bytes()
+            "data": img_data.read() if isinstance(img_data, io.BytesIO) else img_data.read_bytes()
         },
     ]
     prompt_parts = [
@@ -256,25 +257,26 @@ class GeminiInference():
     # Reset chat history for new image
     self.chat_history = []
     
-    # Validate that an image is present
+    # Handle remote or local images
     if image_path.startswith('http'):
-        # read remote img bytes
-        img = Image.open(requests.get(image_path, stream=True).raw)
-        # save image to local "example_image.jpg"
-        img.save("example_image.jpg")
-        image_path = "example_image.jpg"
-
-    if not (img := Path(image_path)).exists():
-        raise FileNotFoundError(f"Could not find image: {img}")
+        # Read remote image into memory
+        response = requests.get(image_path, stream=True)
+        img_data = io.BytesIO(response.content)
+    else:
+        # Local file path
+        img = Path(image_path)
+        if not img.exists():
+            raise FileNotFoundError(f"Could not find image: {img}")
+        img_data = img
 
     # Generate response and extract number
-    answer = self.get_response(img)
+    answer = self.get_response(img_data)
     extracted_number = self.extract_number(answer)
     
     logging.info(f"Extracted number: {extracted_number}")
     
     if extracted_number.upper() != "NONE":
-        validation_result = self.validate_number(extracted_number, img)
+        validation_result = self.validate_number(extracted_number, img_data)
         if "<VALID>" in validation_result:
             logging.info(f"Valid number found: {extracted_number}")
             self.reset_incorrect_predictions()
@@ -294,16 +296,16 @@ class GeminiInference():
         # Add a retry prompt to the chat history, emphasizing it's the same image
         self.chat_history.append({
             "role": "user", 
-            "parts": [img, "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
+            "parts": [img_data, "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
         })
         
-        retry_answer = self.get_response(img)  # This will use the updated chat history
+        retry_answer = self.get_response(img_data)  # This will use the updated chat history
         retry_extracted_number = self.extract_number(retry_answer)
         
         logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
         
         if retry_extracted_number.upper() != "NONE":
-            validation_result = self.validate_number(retry_extracted_number, img)
+            validation_result = self.validate_number(retry_extracted_number, img_data)
             if "<VALID>" in validation_result:
                 logging.info(f"Valid number found in retry: {retry_extracted_number}")
                 self.reset_incorrect_predictions()

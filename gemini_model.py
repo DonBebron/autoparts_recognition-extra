@@ -65,6 +65,8 @@ Provide the response in this format:
 
 Include spaces between number segments as shown in the example structure above.
 
+If there are multiple numbers in the image, please identify the one that is most likely to be the correct part number.
+
 Please follow the above steps to recognize the correct detail number and format the response as follows:
 
 **Response Format:**

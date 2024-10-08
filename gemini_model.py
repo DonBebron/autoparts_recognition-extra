@@ -150,8 +150,8 @@ class GeminiInference():
             response = chat.send_message(prompt_parts)
             logging.info(f"get_response output: {response.text}")
             
-            # Update chat history
-            self.chat_history.append({"role": "user", "parts": prompt_parts})
+            # Update chat history with the correct format
+            self.chat_history.append({"role": "user", "parts": [{"type": "image", "data": image_parts[0]}, self.prompt]})
             self.chat_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
@@ -296,7 +296,10 @@ class GeminiInference():
         # Add a retry prompt to the chat history, emphasizing it's the same image
         self.chat_history.append({
             "role": "user", 
-            "parts": [img_data, "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."]
+            "parts": [
+                {"type": "image", "data": image_parts[0]},
+                "This is the exact same image as before. Please try again to identify the VAG part number in this image. Look carefully for any alphanumeric sequences that might match the VAG part number format, even if they're not immediately obvious."
+            ]
         })
         
         retry_answer = self.get_response(img_data)  # This will use the updated chat history

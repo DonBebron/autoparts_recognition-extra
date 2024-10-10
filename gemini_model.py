@@ -211,52 +211,35 @@ class GeminiInference():
     ]
     
     prompt = f"""
-    Strictly validate the following VAG (Volkswagen Audi Group) part number: {formatted_number}
+     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
+    Rules for validation:
+    1. The number should consist of 9-11 characters.
+    2. It may or may not be visibly divided into groups.
+    3. The structure should closely follow this pattern:
+       - First part: 3 characters (e.g., "5Q0", "8S0")
+       - Middle part: 3 digits (e.g., "937", "907")
+       - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+    4. The entire number may be continuous without spaces, but should still follow the above structure.
+    5. Pay extra attention to commonly confused digits:
+       - '9' and '8' can be easily confused
+       - '0' and 'O' (letter O) should not be mixed up
+       - '1' and 'I' (letter I) should not be confused
+    6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
+    7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
+    8. Ensure no extra digits or characters are included that don't belong to the actual part number.
+    9. Check if the number could be an upside-down non-VAG number:
+       - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
+       - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
 
-    Examine the provided image meticulously and confirm that the extracted number {formatted_number} is EXACTLY and CLEARLY visible in the image. Look for this precise sequence of characters, focusing on labels, stickers, or embossed areas.
+       Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
-    Validation Rules (ALL MUST BE MET for a VALID result):
-
-    1. Exact Match: The number in the image must EXACTLY match {formatted_number}, including all spaces and characters.
-    2. Clear Visibility: The number must be clearly readable and not obscured or partially visible.
-    3. Correct Location: Typically found on labels, near barcodes, or embossed on the part itself.
-    4. Proper Format: Must strictly follow the pattern [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
-       Example: 5K0 937 087 AC Z15
-       
-    5. Component Breakdown (each part must be correct):
-       a) First Number (3 characters):
-          - First two digits: Valid vehicle type code
-          - Third digit: Valid body shape or variant code (0-9)
-       b) Middle Number (3 digits):
-          - First digit: Valid main group code (0-9)
-          - Last two digits: Valid subgroup code
-       c) Final Number (3 digits):
-          - Must be a valid specific part identifier
-       d) Index (if present): 1-2 letters only
-       e) Software Variant (if present): Must start with Z followed by numbers
-
-    6. No Digit-Letter Confusion:
-       - '1' and 'I', '0' and 'O', '8' and 'B', '5' and 'S', '2' and 'Z' must not be confused
-    7. No Upside-Down Numbers: Ensure the number isn't an inverted non-VAG number
-    8. Special Cases (if applicable):
-       - Exchange parts: Marked with 'X' at the end
-       - Standard parts: May start with 9xx.xxx or 052.xxx
-       - Specific prefixes: 'G' for lubricants, 'D' for sealants, 'B' for brake fluids
-
-    Previously incorrect predictions: {', '.join(self.incorrect_predictions)}
-
-    Based on your strict examination, respond ONLY with one of the following:
-
-    If ALL validation rules are met and the exact number is found:
+    If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
     <VALID>
-
-    If the exact number is found but ANY rule is violated:
+    If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
     <INVALID>
-
-    If the exact number is not found in the image:
-    <NOT_FOUND>
-
-    Explanation: [Concise explanation of your findings, including specific reasons for invalidity or not found status]
+    If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line in the upper right corner of the label that might contain the part number (which is usually bigger)):
+    <INVALID>
+    Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
     """
 
     prompt_parts = [
@@ -288,46 +271,29 @@ class GeminiInference():
     # Reset message history for new image
     self.message_history = []
 
-    # Generate response and extract number
-    answer = self.get_response(img_data)
-    extracted_number = self.extract_number(answer)
-    
-    logging.info(f"Extracted number: {extracted_number}")
-    
-    if extracted_number.upper() != "NONE":
-        validation_result = self.validate_number(extracted_number, img_data)
-        if "<VALID>" in validation_result:
-            logging.info(f"Valid number found: {extracted_number}")
-            self.reset_incorrect_predictions()
-            return extracted_number
-        elif "<NOT_FOUND>" in validation_result:
-            logging.warning(f"Extracted number not found in image: {validation_result}")
-            self.incorrect_predictions.append(extracted_number)
-        else:
-            logging.warning(f"Validation failed: {validation_result}")
-            self.incorrect_predictions.append(extracted_number)
-    else:
-        logging.warning("No number found")
+    max_attempts = 3  # Initial attempt + 2 additional attempts
+    for attempt in range(max_attempts):
+        # Generate response and extract number
+        answer = self.get_response(img_data, retry=(attempt > 0))
+        extracted_number = self.extract_number(answer)
         
-        # If NONE is returned, try one more time with the same prompt
-        logging.info("Attempting one more time with the same image")
+        logging.info(f"Attempt {attempt + 1}: Extracted number: {extracted_number}")
         
-        retry_answer = self.get_response(img_data, retry=True)  # This will use the retry prompt and message history
-        retry_extracted_number = self.extract_number(retry_answer)
-        
-        logging.info(f"Retry attempt: Extracted number: {retry_extracted_number}")
-        
-        if retry_extracted_number.upper() != "NONE":
-            validation_result = self.validate_number(retry_extracted_number, img_data)
+        if extracted_number.upper() != "NONE":
+            validation_result = self.validate_number(extracted_number, img_data)
             if "<VALID>" in validation_result:
-                logging.info(f"Valid number found in retry: {retry_extracted_number}")
+                logging.info(f"Valid number found: {extracted_number}")
                 self.reset_incorrect_predictions()
-                return retry_extracted_number
+                return extracted_number
             else:
-                logging.warning(f"Retry validation failed: {validation_result}")
-                self.incorrect_predictions.append(retry_extracted_number)
+                logging.warning(f"Validation failed: {validation_result}")
+                self.incorrect_predictions.append(extracted_number)
+                if attempt < max_attempts - 1:
+                    logging.info(f"Attempting to find another VAG number (Attempt {attempt + 2}/{max_attempts})")
         else:
-            logging.warning("No number found in retry attempt")
+            logging.warning(f"No number found in attempt {attempt + 1}")
+            if attempt < max_attempts - 1:
+                logging.info(f"Attempting to find another VAG number (Attempt {attempt + 2}/{max_attempts})")
 
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page

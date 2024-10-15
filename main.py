@@ -31,6 +31,7 @@ def parse_args():
     
     parser.add_argument('--model', type=str, required=True, help="The name of the model to use, e.g., 'gemini'")
     parser.add_argument('--gemini-api', type=str, required=True, help="API key for the Gemini model")
+    parser.add_argument('--validator-api', type=str, required=True, help="API key for the validator model")
     parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-pro', required=False, help="Gemini model u going to use")
     parser.add_argument('--prompt', type=str, default=None, required=False, help="source to txt file write prompt written inside")
     parser.add_argument('--first-page-link', type=str, default='https://injapan.ru/category/2084017018/currency-USD/mode-1/condition-used/page-1/sort-enddate/order-ascending.html', required=False, help="")
@@ -54,7 +55,7 @@ def parse_args():
             prompt = None 
 
     return (
-        args.model, args.gemini_api, 
+        args.model, args.gemini_api, args.validator_api,
         {
             'gemini_model': args.gemini_api_model, 
             'prompt': prompt, 
@@ -206,13 +207,16 @@ def reduce(main_link:str,
 
 if __name__ == "__main__": 
     # Parse important variables
-    model_name, gemini_api, addictional_data = parse_args() 
+    model_name, gemini_api, validator_api, additional_data = parse_args() 
 
-    # Initalize models
-    assert model_name in ['gemini'], "There no available model you lookin for"
+    # Initialize models
+    assert model_name in ['gemini'], "There is no available model you're looking for"
 
     if model_name == 'gemini': 
-        model = GeminiInference(api_key =gemini_api, model_name =addictional_data['gemini_model'], prompt=addictional_data['prompt'])
+        model = GeminiInference(api_key=gemini_api, 
+                                validator_api_key=validator_api, 
+                                model_name=additional_data['gemini_model'], 
+                                prompt=additional_data['prompt'])
     else: 
         model = None 
 
@@ -220,21 +224,21 @@ if __name__ == "__main__":
 
     logging.info(f"Starting encoding process with model: {model_name}")
     encoding_result = reduce(
-        addictional_data['main_link'], 
+        additional_data['main_link'], 
         picker = picker, 
         model=model,
-        ignore_error=addictional_data['ignore_error'],
-        max_steps=addictional_data['max_steps'],
-        max_links=addictional_data['max_links'],
-        savename=addictional_data['savename']
+        ignore_error=additional_data['ignore_error'],
+        max_steps=additional_data['max_steps'],
+        max_links=additional_data['max_links'],
+        savename=additional_data['savename']
     )
 
     # Save final results
     try:
-        pd.DataFrame(encoding_result).to_excel(f"{addictional_data['savename']}.xlsx", index=False)
-        logging.info(f"Final results saved to {addictional_data['savename']}.xlsx")
+        pd.DataFrame(encoding_result).to_excel(f"{additional_data['savename']}.xlsx", index=False)
+        logging.info(f"Final results saved to {additional_data['savename']}.xlsx")
     except Exception as e:
         logging.error(f"Error saving to Excel: {e}. Saving in pickle format instead.")
-        with open(f'{addictional_data["savename"]}.pkl', 'wb') as f:
+        with open(f'{additional_data["savename"]}.pkl', 'wb') as f:
             pickle.dump(encoding_result, f)
-        logging.info(f"Final results saved to {addictional_data['savename']}.pkl")
+        logging.info(f"Final results saved to {additional_data['savename']}.pkl")

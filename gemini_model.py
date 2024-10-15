@@ -57,8 +57,9 @@ Please follow the above steps to recognize the correct detail number and format 
 """
 
 class GeminiInference():
-  def __init__(self, api_key, model_name='gemini-1.5-flash', prompt=None):
+  def __init__(self, api_key, validator_api_key, model_name='gemini-1.5-flash', prompt=None):
     self.gemini_key = api_key
+    self.validator_key = validator_api_key
     self.prompt = prompt if prompt is not None else DEFAULT_PROMPT
 
     genai.configure(api_key=self.gemini_key)
@@ -97,6 +98,9 @@ class GeminiInference():
     self.message_history = []
 
   def create_validator_model(self, model_name):
+    # Configure the validator model with its own API key
+    genai.configure(api_key=self.validator_key)
+    
     # Create a separate model instance for validation
     generation_config = {
         "temperature": 1,
@@ -105,7 +109,22 @@ class GeminiInference():
         "max_output_tokens": 8192,
     }
     safety_settings = [
-        # ... (same safety settings as the main model)
+        {
+            "category": "HARM_CATEGORY_HARASSMENT",
+            "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+            "category": "HARM_CATEGORY_HATE_SPEECH",
+            "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+            "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+        },
     ]
     return genai.GenerativeModel(model_name=model_name,
                                  generation_config=generation_config,
@@ -180,6 +199,9 @@ class GeminiInference():
     return number
 
   def validate_number(self, extracted_number, img_data):
+    # Ensure we're using the validator API key for this request
+    genai.configure(api_key=self.validator_key)
+    
     # Format the extracted number before validation
     formatted_number = self.format_part_number(extracted_number)
     
@@ -215,6 +237,8 @@ class GeminiInference():
 
        Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
 
+       Try to think step by step, do not rush.
+
     If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
     <VALID>
     If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
@@ -238,6 +262,9 @@ class GeminiInference():
     self.message_history = []  # Reset message history along with incorrect predictions
 
   def __call__(self, image_path):
+    # Ensure we're using the main API key for the main model
+    genai.configure(api_key=self.gemini_key)
+    
     # Handle remote or local images
     if image_path.startswith('http'):
         # Read remote image into memory

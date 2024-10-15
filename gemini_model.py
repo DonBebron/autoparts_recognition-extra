@@ -14,42 +14,36 @@ import io
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-DEFAULT_PROMPT = """     identify Main Catalog Number from photo by this Algorithm
-
-
-**Note:** This algorithm is specifically designed to identify and verify VAG part numbers. Assume all part numbers belong to VAG by default.
-
-1. **Identify Potential Numbers on the Photo:**
-   - **Examine All Numbers:** Carefully inspect the image for various numbers and markings.
-   - **Identify Numbers Resembling Catalog Numbers:** Look for numbers with a structured format that includes a combination of digits and letters, often separated into groups (e.g., `1K2 820 015 C`). This format is typical for parts catalog numbers.
-   - **Clarification:** Focus on numbers that fit the standard format (three groups of characters) and avoid mistaking additional characters or version codes (e.g., "H03" or "0012") as part of the primary catalog number. 
-
-2. **Analyze the Structure of the Numbers:**
-   - **Catalog Numbers (Part Numbers):** These numbers typically consist of 9-10 characters, divided into groups, each carrying specific information:
-     - **First Group:** Indicates the car model or platform (e.g., "1K2" for VW Golf V).
-     - **Second Group:** Describes the type of part (e.g., "820" for air conditioning systems).
-     - **Third Group:** Refers to the version or modification of the part.
-   - **OEM Numbers:** OEM (Original Equipment Manufacturer) numbers may not follow these rules, often start with letters, have a less structured appearance, and may be accompanied by the manufacturer's logo.
-   - **Clarification:** Avoid including version or revision codes (e.g., "H03", "0012") within the primary catalog number unless it's specifically relevant to the core part number format.
-
-3. **Determine the Brand by the Numbers:**
-   - **VAG Numbers:** Numbers that follow the Volkswagen Audi Group (VAG) standard adhere to the structure described above. These numbers often do not have logos from third-party manufacturers.
-   - **OEM Numbers:** If the number is accompanied by a third-party manufacturer's logo (e.g., Valeo), and the number does not follow the standard VAG format, it is likely an OEM number.
-   - **Clarification:** Prioritize the identification of the main VAG catalog number (e.g., "4H0 907 801 E") and treat any additional characters (e.g., "0012", "H03") as supplementary information, not as part of the main catalog number.
-
-4. **Verify the Accuracy of the Number:**
-   - **Match with Known Formats:** Compare the identified number with commonly accepted formats for the brand. For example, VAG numbers should adhere to the standard format described above.
-   - **Check Against Catalogs:** If possible, use an official parts catalog to verify the number. Enter the number into the catalog's search system to ensure it corresponds to the correct part.
-   - **Compare with Other Numbers:** If multiple numbers are present on the part, ensure that the number you have identified matches the described format and is the primary catalog number, not the OEM number.
-   - **Clarification:** When comparing numbers, ensure that you separate the core catalog number from any additional version codes or supplementary characters.
-
-5. **Final Check and Marking:**
-   - **Absence of Third-Party Logos:** Ensure that the number you believe to be the catalog number is not accompanied by a third-party manufacturer's logo (if it is supposed to be an original VAG number).
-   - **Logical Placement:** The catalog number is usually placed in a prominent location or on the main part of the label, making it easier to identify.
-   - **Clarification:** Focus on the number in the main location (often near the brand's logo) as the primary catalog number and treat additional codes as supplementary, ensuring they don't replace the main number.
-
-
-Please follow the above steps to recognize the correct detail number and format the response as follows:
+DEFAULT_PROMPT = f"""
+    Strictly validate the following VAG (Volkswagen Audi Group) part number: {formatted_number}
+    Examine the provided image meticulously and confirm that the extracted number {formatted_number} is EXACTLY and CLEARLY visible in the image. Look for this precise sequence of characters, focusing on labels, stickers, or embossed areas.
+    Validation Rules (ALL MUST BE MET for a VALID result):
+    1. Exact Match: The number in the image must EXACTLY match {formatted_number}, including all spaces and characters.
+    2. Clear Visibility: The number must be clearly readable and not obscured or partially visible.
+    3. Correct Location: Typically found on labels, near barcodes, or embossed on the part itself.
+    4. Proper Format: Must strictly follow the pattern [First Number] [Middle Number] [Final Number] [Index] [Software Variant]
+       Example: 5K0 937 087 AC Z15
+       
+    5. Component Breakdown (each part must be correct):
+       a) First Number (3 characters):
+          - First two digits: Valid vehicle type code
+          - Third digit: Valid body shape or variant code (0-9)
+       b) Middle Number (3 digits):
+          - First digit: Valid main group code (0-9)
+          - Last two digits: Valid subgroup code
+       c) Final Number (3 digits):
+          - Must be a valid specific part identifier
+       d) Index (if present): 1-2 letters only
+       e) Software Variant (if present): Must start with Z followed by numbers
+    6. No Digit-Letter Confusion:
+       - '1' and 'I', '0' and 'O', '8' and 'B', '5' and 'S', '2' and 'Z' must not be confused
+    7. No Upside-Down Numbers: Ensure the number isn't an inverted non-VAG number
+    8. Special Cases (if applicable):
+       - Exchange parts: Marked with 'X' at the end
+       - Standard parts: May start with 9xx.xxx or 052.xxx
+       - Specific prefixes: 'G' for lubricants, 'D' for sealants, 'B' for brake fluids
+    Previously incorrect predictions: {', '.join(self.incorrect_predictions)}
+    Based on your strict examination, respond ONLY with one of the following:
 
 **Response Format:**
 - If a part number is identified: `<START> [Toyota Part Number] <END>`

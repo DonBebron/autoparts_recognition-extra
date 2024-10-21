@@ -236,22 +236,21 @@ class GeminiInference():
     
     prompt = f"""
      Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
+
     Rules for validation:
     1. The number should consist of 9-11 characters.
     2. It may or may not be visibly divided into groups.
-    3. The structure should closely follow this pattern:
-       - First part: 3 characters (e.g., "5Q0", "8S0")
-       - Middle part: 3 digits (e.g., "937", "907")
-       - Last part: 3-4 characters, which may include digits and/or letters (e.g., "085B", "468D")
+    3. The structure MUST adhere to this pattern:
+       - First part: EXACTLY 3 characters (letters and/or digits) (e.g., "5Q0", "8S0", "4H0")
+       - Second part: EXACTLY 3 digits (e.g., "937", "907")
+       - Third part: 3-5 characters, MUST start with a digit, MAY end with one or two letters (e.g., "085B", "468D", "801A", "1234E", "5678FG")
     4. The entire number may be continuous without spaces, but should still follow the above structure.
     5. Pay extra attention to commonly confused digits:
        - '9' and '8' can be easily confused
        - '0' and 'O' (letter O) should not be mixed up
        - '1' and 'I' (letter I) should not be confused
-    6. The last part should not contain any digits after known letter suffixes (e.g., "AD" should not be followed by digits)
-    7. If the last part ends with a single letter, make sure it's not missing (e.g., "T" at the end)
-    8. Ensure no extra digits or characters are included that don't belong to the actual part number.
-    9. Check if the number could be an upside-down non-VAG number:
+    6. Ensure no extra digits or characters are included that don't belong to the actual part number.
+    7. Check if the number could be an upside-down non-VAG number:
        - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
        - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
 
@@ -262,8 +261,6 @@ class GeminiInference():
     If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
     <VALID>
     If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
-    <INVALID>
-    If the number does not follow these rules at all, respond with (in the explanation ask model to look for another line in the upper right corner of the label that might contain the part number (which is usually bigger)):
     <INVALID>
     Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
     """

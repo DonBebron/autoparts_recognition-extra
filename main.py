@@ -30,8 +30,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for running the Extra")
     
     parser.add_argument('--model', type=str, required=True, help="The name of the model to use, e.g., 'gemini'")
-    parser.add_argument('--gemini-api', type=str, required=True, help="API key for the Gemini model")
-    parser.add_argument('--validator-api', type=str, required=True, help="API key for the validator model")
+    parser.add_argument('--api-keys', nargs='+', required=True, help="List of API keys to use")
     parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-pro', required=False, help="Gemini model u going to use")
     parser.add_argument('--prompt', type=str, default=None, required=False, help="source to txt file write prompt written inside")
     parser.add_argument('--first-page-link', type=str, default='https://injapan.ru/category/2084017018/currency-USD/mode-1/condition-used/page-1/sort-enddate/order-ascending.html', required=False, help="")
@@ -55,7 +54,7 @@ def parse_args():
             prompt = None 
 
     return (
-        args.model, args.gemini_api, args.validator_api,
+        args.model, args.api_keys,
         {
             'gemini_model': args.gemini_api_model, 
             'prompt': prompt, 
@@ -207,14 +206,13 @@ def reduce(main_link:str,
 
 if __name__ == "__main__": 
     # Parse important variables
-    model_name, gemini_api, validator_api, additional_data = parse_args() 
+    model_name, api_keys, additional_data = parse_args() 
 
     # Initialize models
     assert model_name in ['gemini'], "There is no available model you're looking for"
 
     if model_name == 'gemini': 
-        model = GeminiInference(api_key=gemini_api, 
-                                validator_api_key=validator_api, 
+        model = GeminiInference(api_keys=api_keys, 
                                 model_name=additional_data['gemini_model'], 
                                 prompt=additional_data['prompt'])
     else: 

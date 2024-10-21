@@ -5,6 +5,7 @@ from pathlib import Path
 from time import sleep
 import random
 import logging
+import time
 
 from PIL import Image
 import requests
@@ -65,12 +66,12 @@ If there are multiple numbers in the image, please identify the one that is most
 """
 
 class GeminiInference():
-  def __init__(self, api_key, validator_api_key, model_name='gemini-1.5-flash', prompt=None):
-    self.gemini_key = api_key
-    self.validator_key = validator_api_key
+  def __init__(self, api_keys, model_name='gemini-1.5-flash', prompt=None):
+    self.api_keys = api_keys
+    self.current_key_index = 0
     self.prompt = prompt if prompt is not None else DEFAULT_PROMPT
 
-    genai.configure(api_key=self.gemini_key)
+    self.configure_api()
     generation_config = {
         "temperature": 1,
         "top_p": 1,
@@ -105,9 +106,17 @@ class GeminiInference():
     self.incorrect_predictions = []
     self.message_history = []
 
+  def configure_api(self):
+    genai.configure(api_key=self.api_keys[self.current_key_index])
+
+  def switch_api_key(self):
+    self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+    self.configure_api()
+    logging.info(f"Switched to API key index: {self.current_key_index}")
+
   def create_validator_model(self, model_name):
     # Configure the validator model with its own API key
-    genai.configure(api_key=self.validator_key)
+    genai.configure(api_key=self.api_keys[self.current_key_index])
     
     # Create a separate model instance for validation
     generation_config = {
@@ -139,7 +148,7 @@ class GeminiInference():
                                  safety_settings=safety_settings)
 
   def get_response(self, img_data, retry=False):
-    max_retries = 20
+    max_retries = 10
     base_delay = 5  # Initial delay in seconds
     
     for attempt in range(max_retries):
@@ -174,11 +183,14 @@ class GeminiInference():
         except Exception as e:
             if "quota" in str(e).lower():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                if delay > 300:  # If delay is more than 5 minutes
+                    self.switch_api_key()
+                    delay = base_delay  # Reset delay after switching
                 logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
-                sleep(delay)
+                time.sleep(delay)
             else:
                 logging.error(f"Error in get_response: {str(e)}")
-                raise  # Re-raise the exception if it's not a rate limit error
+                raise
     
     logging.error("Max retries reached. Unable to get a response.")
     raise Exception("Max retries reached. Unable to get a response.")
@@ -208,7 +220,7 @@ class GeminiInference():
 
   def validate_number(self, extracted_number, img_data):
     # Ensure we're using the validator API key for this request
-    genai.configure(api_key=self.validator_key)
+    genai.configure(api_key=self.api_keys[self.current_key_index])
     
     # Format the extracted number before validation
     formatted_number = self.format_part_number(extracted_number)
@@ -270,8 +282,7 @@ class GeminiInference():
     self.message_history = []  # Reset message history along with incorrect predictions
 
   def __call__(self, image_path):
-    # Ensure we're using the main API key for the main model
-    genai.configure(api_key=self.gemini_key)
+    self.configure_api()  # Ensure we're using the current API key
     
     # Handle remote or local images
     if image_path.startswith('http'):
@@ -288,7 +299,7 @@ class GeminiInference():
     # Reset message history for new image
     self.message_history = []
 
-    max_attempts = 3  # Initial attempt + 2 additional attempts
+    max_attempts = 2  # Initial attempt + 1 additional attempt
     for attempt in range(max_attempts):
         # Generate response and extract number
         answer = self.get_response(img_data, retry=(attempt > 0))

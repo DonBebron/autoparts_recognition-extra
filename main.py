@@ -71,7 +71,8 @@ import math
 
 def encode(link:str, 
            picker:TargetModel, 
-           model:GeminiInference) -> dict:
+           model:GeminiInference,
+           **kwargs) -> dict:
     logging.info(f"Processing link: {link}")
     max_retries = 3
     base_delay = 5
@@ -186,7 +187,7 @@ def reduce(main_link:str,
                 time.sleep(random.uniform(1, 3))
                 
                 logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
-                encoded_data = encode(page_link, picker, **kwargs)
+                encoded_data = encode(page_link, picker, model, **kwargs)  # Pass model and kwargs here
                 for (k, v) in encoded_data.items(): 
                     result[k].append(v)
 

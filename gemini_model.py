@@ -245,7 +245,8 @@ class GeminiInference():
     ]
     
     validation_prompt = self.prompts.get(self.car_brand, {}).get('validation_prompt', "")
-    prompt = validation_prompt.format(extracted_number=extracted_number, incorrect_predictions=', '.join(self.incorrect_predictions))
+    incorrect_predictions_str = ", ".join(self.incorrect_predictions)
+    prompt = validation_prompt.format(extracted_number=extracted_number, incorrect_predictions=incorrect_predictions_str)
 
     prompt_parts = [
         image_parts[0],
@@ -305,3 +306,4 @@ class GeminiInference():
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page
     return "NONE"
+

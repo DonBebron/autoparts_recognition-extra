@@ -298,11 +298,11 @@ class GeminiInference():
                 logging.warning(f"Validation failed: {validation_result}")
                 self.incorrect_predictions.append(extracted_number)
                 if attempt < max_attempts - 1:
-                    logging.info(f"Attempting to find another VAG number (Attempt {attempt + 2}/{max_attempts})")
+                    logging.info(f"Attempting to find another number (Attempt {attempt + 2}/{max_attempts})")
         else:
             logging.warning(f"No number found in attempt {attempt + 1}")
             if attempt < max_attempts - 1:
-                logging.info(f"Attempting to find another VAG number (Attempt {attempt + 2}/{max_attempts})")
+                logging.info(f"Attempting to find another number (Attempt {attempt + 2}/{max_attempts})")
 
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page

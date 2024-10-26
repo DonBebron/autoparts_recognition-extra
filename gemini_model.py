@@ -6,7 +6,8 @@ from time import sleep
 import random
 import logging
 import time
-
+import json
+import os
 from PIL import Image
 import requests
 import re
@@ -66,10 +67,11 @@ If there are multiple numbers in the image, please identify the one that is most
 """
 
 class GeminiInference():
-  def __init__(self, api_keys, model_name='gemini-1.5-flash', prompt=None):
+  def __init__(self, api_keys, model_name='gemini-1.5-flash', car_brand=None):
     self.api_keys = api_keys
     self.current_key_index = 0
-    self.prompt = prompt if prompt is not None else DEFAULT_PROMPT
+    self.car_brand = car_brand.lower() if car_brand else None
+    self.prompts = self.load_prompts()
 
     self.configure_api()
     generation_config = {
@@ -100,11 +102,19 @@ class GeminiInference():
     self.model = genai.GenerativeModel(model_name=model_name,
                                        generation_config=generation_config,
                                        safety_settings=safety_settings,
-                                       system_instruction=self.prompt)
+                                       system_instruction=self.prompts.get(self.car_brand, {}).get('main_prompt', DEFAULT_PROMPT))
 
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
     self.message_history = []
+
+  def load_prompts(self):
+    try:
+      with open('prompts.json', 'r') as f:
+        return json.load(f)
+    except FileNotFoundError:
+      logging.warning("prompts.json not found. Using default prompts.")
+      return {}
 
   def configure_api(self):
     genai.configure(api_key=self.api_keys[self.current_key_index])
@@ -234,36 +244,8 @@ class GeminiInference():
         },
     ]
     
-    prompt = f"""
-     Validate the following VAG (Volkswagen Audi Group) part number: {extracted_number}
-
-    Rules for validation:
-    1. The number should consist of 9-11 characters.
-    2. It may or may not be visibly divided into groups.
-    3. The structure MUST adhere to this pattern:
-       - First part: EXACTLY 3 characters (letters and/or digits) (e.g., "5Q0", "8S0", "4H0")
-       - Second part: EXACTLY 3 digits (e.g., "937", "907")
-       - Third part: 3-5 characters, MUST start with a digit, MAY end with one or two letters (e.g., "085B", "468D", "801A", "1234E", "5678FG")
-    4. The entire number may be continuous without spaces, but should still follow the above structure.
-    5. Pay extra attention to commonly confused digits:
-       - '9' and '8' can be easily confused
-       - '0' and 'O' (letter O) should not be mixed up
-       - '1' and 'I' (letter I) should not be confused
-    6. Ensure no extra digits or characters are included that don't belong to the actual part number.
-    7. Check if the number could be an upside-down non-VAG number:
-       - Look for patterns that might make sense when flipped (e.g., "HOSE" could look like "3SOH" upside down)
-       - Be cautious of numbers that don't follow the typical VAG format but could be valid when flipped
-
-       Previously incorrect predictions on this page: {', '.join(self.incorrect_predictions)}
-
-       Try to think step by step, do not rush.
-
-    If the number follows these rules and is not likely to be an upside-down non-VAG number, respond with:
-    <VALID>
-    If the number does not follow these rules, seems incorrect, or could be an upside-down non-VAG number, respond with:
-    <INVALID>
-    Explanation: [Brief explanation of why it's valid or invalid, including the number itself and any concerns about it being upside-down]
-    """
+    validation_prompt = self.prompts.get(self.car_brand, {}).get('validation_prompt', "")
+    prompt = validation_prompt.format(extracted_number=extracted_number, incorrect_predictions=', '.join(self.incorrect_predictions))
 
     prompt_parts = [
         image_parts[0],

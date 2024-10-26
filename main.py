@@ -161,6 +161,7 @@ def save_intermediate_results(result, filename):
 
 def reduce(main_link:str, 
            picker:TargetModel, 
+           model:GeminiInference,  # Add model as a parameter
            ignore_error:bool = False, 
            max_steps:int = 3, 
            max_links:int = 90, 
@@ -187,7 +188,7 @@ def reduce(main_link:str,
                 time.sleep(random.uniform(1, 3))
                 
                 logging.info(f"Processing {i+1}/{len(all_links)} link: {page_link}")
-                encoded_data = encode(page_link, picker, model, **kwargs)  # Pass model and kwargs here
+                encoded_data = encode(page_link, picker, model)  # Remove kwargs here
                 for (k, v) in encoded_data.items(): 
                     result[k].append(v)
 
@@ -226,13 +227,12 @@ if __name__ == "__main__":
     logging.info(f"Starting encoding process with model: {model_name}")
     encoding_result = reduce(
         additional_data['main_link'], 
-        picker = picker, 
+        picker=picker, 
         model=model,
         ignore_error=additional_data['ignore_error'],
         max_steps=additional_data['max_steps'],
         max_links=additional_data['max_links'],
-        savename=additional_data['savename'],
-        car_brand=additional_data['car_brand']
+        savename=additional_data['savename']
     )
 
     # Save final results

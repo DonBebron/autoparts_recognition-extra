@@ -206,21 +206,22 @@ class GeminiInference():
     raise Exception("Max retries reached. Unable to get a response.")
 
   def format_part_number(self, number):
-    # Remove any existing hyphens and spaces
-    number = number.replace('-', '').replace(' ', '')
-    
-    # Ensure the number has at least 9 characters
-    if len(number) < 9:
-        return number  # Return original if too short
-    
-    # Format the first 9 characters
-    formatted_number = f"{number[:3]} {number[3:6]} {number[6:9]}"
-    
-    # Add the remaining characters, if any
-    if len(number) > 9:
-        formatted_number += f" {number[9:]}"
+    # Check if the number matches the VAG (Audi) pattern
+    if self.car_brand == 'audi' and re.match(r'^[A-Z0-9]{3}[0-9]{3}[0-9]{3,5}[A-Z]?$', number.replace(' ', '').replace('-', '')):
+        # Remove any existing hyphens and spaces
+        number = number.replace('-', '').replace(' ', '')
+        
+        # Format the first 9 characters
+        formatted_number = f"{number[:3]} {number[3:6]} {number[6:9]}"
+        
+        # Add the remaining characters, if any
+        if len(number) > 9:
+            formatted_number += f" {number[9:]}"
 
-    return formatted_number.strip()
+        return formatted_number.strip()
+    else:
+        # If it's not an Audi number or doesn't match the pattern, return the original number
+        return number
 
   def extract_number(self, response):
     number = response.split('<START>')[-1].split("<END>")[0].strip()
@@ -306,4 +307,3 @@ class GeminiInference():
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page
     return "NONE"
-

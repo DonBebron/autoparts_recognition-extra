@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument('--ignore-error', action='store_true', help="Ignore errors and continue processing")
     parser.add_argument('--max-steps', type=int, default=3, required=False, help="Maximum steps to collect links")
     parser.add_argument('--max-links', type=int, default=90, required=False, help="Maximum number of links to collect")
+    parser.add_argument('--car-brand', type=str, required=True, help="Car brand to use for prompts (e.g., 'audi' or 'toyota')")
 
     args = parser.parse_args()
     
@@ -62,7 +63,8 @@ def parse_args():
             'savename': args.save_file_name,
             'ignore_error': args.ignore_error,
             'max_steps': args.max_steps,
-            'max_links': args.max_links
+            'max_links': args.max_links,
+            'car_brand': args.car_brand
          },)
 
 import math
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     if model_name == 'gemini': 
         model = GeminiInference(api_keys=api_keys, 
                                 model_name=additional_data['gemini_model'], 
-                                prompt=additional_data['prompt'])
+                                car_brand=additional_data['car_brand'])
     else: 
         model = None 
 
@@ -228,7 +230,8 @@ if __name__ == "__main__":
         ignore_error=additional_data['ignore_error'],
         max_steps=additional_data['max_steps'],
         max_links=additional_data['max_links'],
-        savename=additional_data['savename']
+        savename=additional_data['savename'],
+        car_brand=additional_data['car_brand']
     )
 
     # Save final results

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd  
 import pickle 
 import requests
+import json
 
 from io import BytesIO
 from PIL import Image
@@ -33,39 +34,52 @@ def parse_args():
     parser.add_argument('--api-keys', nargs='+', required=True, help="List of API keys to use")
     parser.add_argument('--gemini-api-model', type=str, default='gemini-1.5-pro', required=False, help="Gemini model u going to use")
     parser.add_argument('--prompt', type=str, default=None, required=False, help="source to txt file write prompt written inside")
-    parser.add_argument('--first-page-link', type=str, default='https://injapan.ru/category/2084017018/currency-USD/mode-1/condition-used/page-1/sort-enddate/order-ascending.html', required=False, help="")
+    parser.add_argument('--first-page-link', type=str, default=None, required=False, help="")  # Made optional
     parser.add_argument('--save-file-name', type=str, default='recognized_data', required=False, help="")
     parser.add_argument('--ignore-error', action='store_true', help="Ignore errors and continue processing")
     parser.add_argument('--max-steps', type=int, default=3, required=False, help="Maximum steps to collect links")
     parser.add_argument('--max-links', type=int, default=90, required=False, help="Maximum number of links to collect")
-    parser.add_argument('--car-brand', type=str, required=True, help="Car brand to use for prompts (e.g., 'audi' or 'toyota')")
+    parser.add_argument('--car-brand', type=str, required=True, help="Car brand to use for prompts. Supported brands: audi, toyota, nissan, suzuki, honda, daihatsu, subaru, mazda, bmw, lexus, volkswagen, volvo, mini, fiat, citroen, renault, ford, isuzu, opel, mitsubishi, mercedes, jaguar, peugeot, porsche, alfa_romeo, chevrolet")
 
     args = parser.parse_args()
     
-    if (args.prompt) == None: 
+    # Load prompts.json to get the default first page URL
+    with open('prompts.json', 'r') as f:
+        prompts = json.load(f)
+    
+    # Use provided URL or get from prompts.json based on car brand
+    first_page_link = args.first_page_link
+    if first_page_link is None:
+        if args.car_brand.lower() in prompts:
+            first_page_link = prompts[args.car_brand.lower()]['first_page_url']
+            logging.info(f"Using default first page URL for {args.car_brand}: {first_page_link}")
+        else:
+            raise ValueError(f"Car brand '{args.car_brand}' not found in prompts.json")
+    
+    if args.prompt is None:
         prompt = None
-    else: 
-        try: 
+    else:
+        try:
             print(f"Reading file in {args.prompt}")
-            with open(args.prompt, 'r') as f: 
-                prompt = f.read() 
+            with open(args.prompt, 'r') as f:
+                prompt = f.read()
                 print("Readed Prompt: ", prompt)
-        except Exception as e: 
+        except Exception as e:
             print(f"Error while reading the {args.prompt}:", e)
-            prompt = None 
+            prompt = None
 
     return (
         args.model, args.api_keys,
         {
-            'gemini_model': args.gemini_api_model, 
-            'prompt': prompt, 
-            'main_link': args.first_page_link, 
+            'gemini_model': args.gemini_api_model,
+            'prompt': prompt,
+            'main_link': first_page_link,  # Use the determined first page link
             'savename': args.save_file_name,
             'ignore_error': args.ignore_error,
             'max_steps': args.max_steps,
             'max_links': args.max_links,
             'car_brand': args.car_brand
-         },)
+        },)
 
 import math
 

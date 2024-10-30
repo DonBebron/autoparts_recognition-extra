@@ -73,34 +73,22 @@ class TokenCounter:
         self.total_requests = 0
         self.prompt_tokens = 0
         self.response_tokens = 0
-        self.image_tokens = 0  # New counter for image tokens
+        self.image_tokens = 0
         
     def add_image_tokens(self):
-        # According to Google's documentation, each image costs ~450 tokens
         IMAGE_TOKEN_COST = 450
         self.image_tokens += IMAGE_TOKEN_COST
         self.total_tokens += IMAGE_TOKEN_COST
-        logging.info(f"Added {IMAGE_TOKEN_COST} tokens for image. Image tokens total: {self.image_tokens}")
         
     def add_tokens(self, response, prompt_tokens=0):
         try:
-            # Count response tokens
             response_tokens = response.candidates[0].token_count
             self.response_tokens += response_tokens
-            
-            # Add prompt tokens
             self.prompt_tokens += prompt_tokens
-            
-            # Update totals
             self.total_tokens += (response_tokens + prompt_tokens)
             self.total_requests += 1
-            
-            logging.info(f"Request tokens - Prompt: {prompt_tokens}, Response: {response_tokens}")
-            logging.info(f"Cumulative - Total: {self.total_tokens:,}, Requests: {self.total_requests}")
-            
             return response_tokens
         except Exception as e:
-            logging.warning(f"Could not count tokens: {e}")
             return 0
             
     def get_stats(self):
@@ -108,7 +96,7 @@ class TokenCounter:
             "total_tokens": self.total_tokens,
             "prompt_tokens": self.prompt_tokens,
             "response_tokens": self.response_tokens,
-            "image_tokens": self.image_tokens,  # Added to stats
+            "image_tokens": self.image_tokens,
             "total_requests": self.total_requests,
             "average_tokens_per_request": self.total_tokens / self.total_requests if self.total_requests > 0 else 0
         }

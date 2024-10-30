@@ -66,6 +66,31 @@ If there are multiple numbers in the image, please identify the one that is most
 - If no valid number is identified: `<START> NONE <END>`
 """
 
+# Add token counting class
+class TokenCounter:
+    def __init__(self):
+        self.total_tokens = 0
+        self.total_requests = 0
+        
+    def add_tokens(self, response):
+        # Get token count from response
+        try:
+            token_count = response.candidates[0].token_count
+            self.total_tokens += token_count
+            self.total_requests += 1
+            logging.info(f"Request used {token_count} tokens. Total tokens: {self.total_tokens} across {self.total_requests} requests")
+            return token_count
+        except Exception as e:
+            logging.warning(f"Could not count tokens: {e}")
+            return 0
+            
+    def get_stats(self):
+        return {
+            "total_tokens": self.total_tokens,
+            "total_requests": self.total_requests,
+            "average_tokens_per_request": self.total_tokens / self.total_requests if self.total_requests > 0 else 0
+        }
+
 class GeminiInference():
   def __init__(self, api_keys, model_name='gemini-1.5-flash', car_brand=None):
     self.api_keys = api_keys
@@ -107,6 +132,9 @@ class GeminiInference():
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
     self.message_history = []
+
+    # Add token counter
+    self.token_counter = TokenCounter()
 
   def load_prompts(self):
     try:
@@ -183,6 +211,10 @@ class GeminiInference():
             
             chat = self.model.start_chat(history=self.message_history)
             response = chat.send_message(full_prompt)
+            
+            # Count tokens
+            self.token_counter.add_tokens(response)
+            
             logging.info(f"Main model response: {response.text}")
             
             # Update message history
@@ -255,6 +287,10 @@ class GeminiInference():
     ]
 
     response = self.validator_model.generate_content(prompt_parts)
+    
+    # Count tokens for validation request
+    self.token_counter.add_tokens(response)
+    
     logging.info(f"Validator model response: {response.text}")
     return response.text
 
@@ -307,3 +343,7 @@ class GeminiInference():
     logging.warning("All attempts failed. Returning NONE.")
     self.reset_incorrect_predictions()  # Reset for the next page
     return "NONE"
+
+  def get_token_stats(self):
+    """Get statistics about token usage"""
+    return self.token_counter.get_stats()

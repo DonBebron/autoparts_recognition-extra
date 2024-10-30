@@ -262,7 +262,11 @@ if __name__ == "__main__":
     # Log token usage statistics
     if model_name == 'gemini':
         token_stats = model.get_token_stats()
-        logging.info("Token Usage Statistics:")
+        logging.info("\nToken Usage Statistics:")
         logging.info(f"Total tokens used: {token_stats['total_tokens']:,}")
+        logging.info(f"  - Prompt tokens: {token_stats['prompt_tokens']:,}")
+        logging.info(f"  - Response tokens: {token_stats['response_tokens']:,}")
+        logging.info(f"  - Image tokens: {token_stats['image_tokens']:,}")
         logging.info(f"Total requests made: {token_stats['total_requests']:,}")
         logging.info(f"Average tokens per request: {token_stats['average_tokens_per_request']:.2f}")
+

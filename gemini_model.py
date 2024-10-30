@@ -66,41 +66,6 @@ If there are multiple numbers in the image, please identify the one that is most
 - If no valid number is identified: `<START> NONE <END>`
 """
 
-# Add token counting class
-class TokenCounter:
-    def __init__(self):
-        self.total_tokens = 0
-        self.total_requests = 0
-        self.prompt_tokens = 0
-        self.response_tokens = 0
-        self.image_tokens = 0
-        
-    def add_image_tokens(self):
-        IMAGE_TOKEN_COST = 450
-        self.image_tokens += IMAGE_TOKEN_COST
-        self.total_tokens += IMAGE_TOKEN_COST
-        
-    def add_tokens(self, response, prompt_tokens=0):
-        try:
-            response_tokens = response.candidates[0].token_count
-            self.response_tokens += response_tokens
-            self.prompt_tokens += prompt_tokens
-            self.total_tokens += (response_tokens + prompt_tokens)
-            self.total_requests += 1
-            return response_tokens
-        except Exception as e:
-            return 0
-            
-    def get_stats(self):
-        return {
-            "total_tokens": self.total_tokens,
-            "prompt_tokens": self.prompt_tokens,
-            "response_tokens": self.response_tokens,
-            "image_tokens": self.image_tokens,
-            "total_requests": self.total_requests,
-            "average_tokens_per_request": self.total_tokens / self.total_requests if self.total_requests > 0 else 0
-        }
-
 class GeminiInference():
   def __init__(self, api_keys, model_name='gemini-1.5-flash', car_brand=None):
     self.api_keys = api_keys
@@ -134,29 +99,14 @@ class GeminiInference():
         },
     ]
 
-    # Get system prompt
     self.system_prompt = self.prompts.get(self.car_brand, {}).get('main_prompt', DEFAULT_PROMPT)
     
-    # Initialize model with system prompt
     self.model = genai.GenerativeModel(
         model_name=model_name,
         generation_config=generation_config,
         safety_settings=safety_settings,
         system_instruction=self.system_prompt
     )
-
-    # Count system prompt tokens
-    try:
-        system_tokens = len(self.system_prompt.split())  # Rough estimation
-        logging.info(f"System prompt estimated tokens: {system_tokens}")
-    except Exception as e:
-        system_tokens = 0
-        logging.warning(f"Could not estimate system prompt tokens: {e}")
-
-    # Initialize token counter with system prompt
-    self.token_counter = TokenCounter()
-    self.token_counter.prompt_tokens += system_tokens
-    self.token_counter.total_tokens += system_tokens
 
     self.validator_model = self.create_validator_model(model_name)
     self.incorrect_predictions = []
@@ -179,10 +129,8 @@ class GeminiInference():
     logging.info(f"Switched to API key index: {self.current_key_index}")
 
   def create_validator_model(self, model_name):
-    # Configure the validator model with its own API key
     genai.configure(api_key=self.api_keys[self.current_key_index])
     
-    # Create a separate model instance for validation
     generation_config = {
         "temperature": 1,
         "top_p": 1,
@@ -213,7 +161,7 @@ class GeminiInference():
 
   def get_response(self, img_data, retry=False):
     max_retries = 10
-    base_delay = 5  # Initial delay in seconds
+    base_delay = 5
     
     for attempt in range(max_retries):
         try:
@@ -232,31 +180,24 @@ class GeminiInference():
             
             full_prompt = image_parts + prompt_parts
             
-            # Add a small random delay before each request
             sleep(random.uniform(1, 3))
-            
-            # Estimate prompt tokens (rough estimation)
-            prompt_tokens = len(str(prompt_parts).split()) if retry else 0
             
             chat = self.model.start_chat(history=self.message_history)
             response = chat.send_message(full_prompt)
             
-            # Count tokens including prompt
-            self.token_counter.add_tokens(response, prompt_tokens)
-            
             logging.info(f"Main model response: {response.text}")
             
-            # Update message history
             self.message_history.append({"role": "user", "parts": full_prompt})
             self.message_history.append({"role": "model", "parts": [response.text]})
             
             return response.text
+            
         except Exception as e:
             if "quota" in str(e).lower():
                 delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                if delay > 300:  # If delay is more than 5 minutes
+                if delay > 300:
                     self.switch_api_key()
-                    delay = base_delay  # Reset delay after switching
+                    delay = base_delay
                 logging.warning(f"Rate limit reached. Attempt {attempt + 1}/{max_retries}. Retrying in {delay:.2f} seconds...")
                 time.sleep(delay)
             else:
@@ -267,21 +208,16 @@ class GeminiInference():
     raise Exception("Max retries reached. Unable to get a response.")
 
   def format_part_number(self, number):
-    # Check if the number matches the VAG (Audi) pattern
     if self.car_brand == 'audi' and re.match(r'^[A-Z0-9]{3}[0-9]{3}[0-9]{3,5}[A-Z]?$', number.replace(' ', '').replace('-', '')):
-        # Remove any existing hyphens and spaces
         number = number.replace('-', '').replace(' ', '')
         
-        # Format the first 9 characters
         formatted_number = f"{number[:3]} {number[3:6]} {number[6:9]}"
         
-        # Add the remaining characters, if any
         if len(number) > 9:
             formatted_number += f" {number[9:]}"
 
         return formatted_number.strip()
     else:
-        # If it's not an Audi number or doesn't match the pattern, return the original number
         return number
 
   def extract_number(self, response):
@@ -291,10 +227,8 @@ class GeminiInference():
     return number
 
   def validate_number(self, extracted_number, img_data):
-    # Ensure we're using the validator API key for this request
     genai.configure(api_key=self.api_keys[self.current_key_index])
     
-    # Format the extracted number before validation
     formatted_number = self.format_part_number(extracted_number)
     
     image_parts = [
@@ -306,9 +240,6 @@ class GeminiInference():
         },
     ]
     
-    # Count image tokens for validation
-    self.token_counter.add_image_tokens()
-    
     validation_prompt = self.prompts.get(self.car_brand, {}).get('validation_prompt', "")
     incorrect_predictions_str = ", ".join(self.incorrect_predictions)
     prompt = validation_prompt.format(extracted_number=extracted_number, incorrect_predictions=incorrect_predictions_str)
@@ -317,43 +248,32 @@ class GeminiInference():
         image_parts[0],
         prompt,
     ]
-
-    # Estimate validation prompt tokens
-    prompt_tokens = len(prompt.split())  # Rough estimation
     
     response = self.validator_model.generate_content(prompt_parts)
-    
-    # Count tokens including validation prompt
-    self.token_counter.add_tokens(response, prompt_tokens)
     
     logging.info(f"Validator model response: {response.text}")
     return response.text
 
   def reset_incorrect_predictions(self):
     self.incorrect_predictions = []
-    self.message_history = []  # Reset message history along with incorrect predictions
+    self.message_history = []
 
   def __call__(self, image_path):
-    self.configure_api()  # Ensure we're using the current API key
+    self.configure_api()
     
-    # Handle remote or local images
     if image_path.startswith('http'):
-        # Read remote image into memory
         response = requests.get(image_path, stream=True)
         img_data = io.BytesIO(response.content)
     else:
-        # Local file path
         img = Path(image_path)
         if not img.exists():
             raise FileNotFoundError(f"Could not find image: {img}")
         img_data = img
 
-    # Reset message history for new image
     self.message_history = []
 
-    max_attempts = 2  # Initial attempt + 1 additional attempt
+    max_attempts = 2
     for attempt in range(max_attempts):
-        # Generate response and extract number
         answer = self.get_response(img_data, retry=(attempt > 0))
         extracted_number = self.extract_number(answer)
         
@@ -376,9 +296,5 @@ class GeminiInference():
                 logging.info(f"Attempting to find another number (Attempt {attempt + 2}/{max_attempts})")
 
     logging.warning("All attempts failed. Returning NONE.")
-    self.reset_incorrect_predictions()  # Reset for the next page
+    self.reset_incorrect_predictions()
     return "NONE"
-
-  def get_token_stats(self):
-    """Get statistics about token usage"""
-    return self.token_counter.get_stats()
